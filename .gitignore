@@ -1,0 +1,12 @@
+/target/
+**/*.rs.bk
+*.log
+.DS_Store
+/.idea
+/.vscode
+.env
+
+# Onion/Tor artifacts
+hidden_service/
+tor_data/
+*.onion
