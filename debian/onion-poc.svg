@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- Background circle -->
+  <circle cx="128" cy="128" r="124" fill="#0a0a12" stroke="#63b3ed" stroke-width="4"/>
+
+  <!-- Onion rings (concentric arcs suggesting anonymity layers) -->
+  <circle cx="128" cy="128" r="90" fill="none" stroke="#63b3ed" stroke-width="3" opacity="0.25"/>
+  <circle cx="128" cy="128" r="68" fill="none" stroke="#63b3ed" stroke-width="3" opacity="0.45"/>
+  <circle cx="128" cy="128" r="46" fill="none" stroke="#63b3ed" stroke-width="3" opacity="0.65"/>
+
+  <!-- Center lock icon -->
+  <rect x="108" y="130" width="40" height="32" rx="5" fill="#63b3ed"/>
+  <path d="M116 130 v-14 a12 12 0 0 1 24 0 v14" fill="none" stroke="#63b3ed" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="128" cy="148" r="5" fill="#0a0a12"/>
+
+  <!-- Small dots on rings (nodes) -->
+  <circle cx="218" cy="128" r="5" fill="#48c774"/>
+  <circle cx="128" cy="38"  r="5" fill="#48c774"/>
+  <circle cx="38"  cy="128" r="5" fill="#48c774"/>
+  <circle cx="128" cy="218" r="5" fill="#48c774"/>
+</svg>

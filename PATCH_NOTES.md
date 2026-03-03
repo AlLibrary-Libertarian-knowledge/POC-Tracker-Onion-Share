@@ -1,0 +1,5 @@
+- Fixed chacha20poly1305 dependency: removed non-existent feature `xchacha20`.
+- Fixed TorControl implementation: tokio TcpStream isn't Clone; now uses `into_split()`.
+- Fixed tokio::select Unpin issue: pinned tor.wait() future.
+- Fixed flush: imported AsyncWriteExt and handled flush result.
+- Fixed anyhow::Context on AEAD errors: use map_err.

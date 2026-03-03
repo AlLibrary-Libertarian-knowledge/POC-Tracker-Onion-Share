@@ -1,0 +1,13 @@
+target/
+.git/
+.github/
+.idea/
+.vscode/
+
+# Ignorar o ambiente docker em si
+deploy/
+
+# Outros
+*.deb
+*.exe
+*.log

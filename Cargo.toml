@@ -1,0 +1,67 @@
+[package]
+name = "onion_poc"
+version = "0.6.1"
+edition = "2021"
+license = "MIT"
+description = "TCC PoC: OnionShare-like encrypted chunk sharing over Tor onion service (Rust)."
+authors = ["Eduardo Prestes <dudu_edn@hotmail.com>"]
+repository = "https://github.com/DJmesh/onion_poc"
+readme = "README.md"
+
+[package.metadata.deb]
+name            = "onion-poc"
+maintainer      = "Eduardo Prestes <dudu_edn@hotmail.com>"
+copyright       = "2024, Eduardo Prestes"
+license-file    = ["LICENSE", "4"]
+depends         = "tor, libc6 (>= 2.17)"
+section         = "net"
+priority        = "optional"
+assets          = [
+    ["target/release/onion_poc", "usr/bin/onion_poc", "755"],
+    ["README.md", "usr/share/doc/onion-poc/README.md", "644"],
+    ["debian/onion-poc.desktop", "usr/share/applications/onion-poc.desktop", "644"],
+    ["debian/onion-poc.svg", "usr/share/icons/hicolor/scalable/apps/onion-poc.svg", "644"],
+    ["debian/onion-poc.appdata.xml", "usr/share/metainfo/br.tcc.onion_poc.appdata.xml", "644"],
+]
+
+[dependencies]
+anyhow      = "1"
+thiserror   = "1"
+clap        = { version = "4.5", features = ["derive"] }
+
+tokio = { version = "1.37", features = [
+    "rt-multi-thread", "macros", "process",
+    "fs", "net", "time", "io-util", "signal",
+    "sync",
+] }
+
+axum        = { version = "0.7", features = ["json"] }
+bytes       = "1"
+serde       = { version = "1", features = ["derive"] }
+serde_json  = "1"
+uuid        = { version = "1", features = ["v4", "serde"] }
+base64      = "0.22"
+memmap2     = "0.9"
+chacha20poly1305 = "0.10"
+blake3      = "1.5"
+rand        = "0.8"
+reqwest     = { version = "0.12", default-features = false, features = [
+    "rustls-tls", "json", "socks", "stream",
+] }
+url         = "2"
+hex         = "0.4"
+directories = "5"
+
+tracing             = "0.1"
+tracing-subscriber  = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# ── GUI nativa (egui/eframe) ─────────────────────────────────────────────────
+eframe = { version = "0.29", default-features = false, features = [
+    "default_fonts", "glow", "x11", "wayland",
+] }
+egui  = "0.29"
+rfd   = "0.14"   # diálogos de arquivo nativos
+
+# ── Tor auto-download (Windows) ──────────────────────────────────────────────
+flate2 = "1"
+tar    = "0.4"

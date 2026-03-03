@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="console-application">
+  <id>br.tcc.onion_poc</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <name>onion-poc</name>
+  <summary>Compartilhamento seguro de arquivos via Tor</summary>
+  <description>
+    <p>
+      TCC PoC: Transferência de arquivos criptografados em chunks via
+      Tor Onion Service. Implementado 100% em Rust.
+    </p>
+    <ul>
+      <li>Criptografia XChaCha20-Poly1305 por chunk</li>
+      <li>Rede Tor Onion Service v3 integrada</li>
+      <li>Interface TUI interativa</li>
+      <li>Suporte a múltiplos arquivos simultâneos</li>
+    </ul>
+  </description>
+  <icon type="stock">onion-poc</icon>
+  <url type="homepage">https://github.com/DJmesh/onion_poc</url>
+  <url type="bugtracker">https://github.com/DJmesh/onion_poc/issues</url>
+  <developer_name>Eduardo Prestes</developer_name>
+  <categories>
+    <category>Network</category>
+    <category>Security</category>
+  </categories>
+  <releases>
+    <release version="0.2.0" date="2024-01-01"/>
+  </releases>
+  <content_rating type="oars-1.1"/>
+</component>

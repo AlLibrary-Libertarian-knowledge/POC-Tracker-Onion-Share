@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=onion-poc
+GenericName=Compartilhamento Seguro via Tor
+Comment=TCC PoC — Transferência de arquivos criptografada via Tor Onion Service
+Exec=onion_poc
+Terminal=false
+Icon=onion-poc
+Categories=Network;Security;FileTransfer;P2P;
+Keywords=tor;onion;share;encrypt;privacy;
+StartupNotify=true

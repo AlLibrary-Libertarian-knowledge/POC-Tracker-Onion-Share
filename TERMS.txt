@@ -1,0 +1,56 @@
+TERMOS DE USO — onion_poc
+══════════════════════════════════════════════════════════════════════
+
+1. FINALIDADE ACADÊMICA
+   Este software é uma Prova de Conceito (PoC) desenvolvida exclusivamente
+   para fins acadêmicos como Trabalho de Conclusão de Curso (TCC).
+   Não substitui soluções comerciais de segurança ou privacidade.
+
+2. RESPONSABILIDADE DO USUÁRIO
+   Ao usar este software, você declara que:
+
+   a) Utilizará o onion_poc apenas para fins legítimos, éticos e legais.
+   b) Não compartilhará conteúdo que viole leis locais, direitos autorais,
+      ou os Termos de Uso da rede Tor.
+   c) Compreende que o software realiza conexões à rede Tor, que em alguns
+      países pode ser restrito ou monitorado.
+
+3. CRIPTOGRAFIA
+   Todos os arquivos compartilhados são criptografados automaticamente
+   usando XChaCha20-Poly1305 com chaves aleatórias de 32 bytes.
+   A chave de decriptação viaja apenas no link compartilhado pelo usuário.
+   Guarde o link com segurança — quem tiver o link pode baixar o arquivo.
+
+4. REDE TOR
+   Este software utiliza o Tor (The Onion Router) para anonimizar as
+   conexões. A qualidade, anonimato e disponibilidade dependem da rede
+   Tor, que é mantida por terceiros. Os autores deste software não têm
+   controle sobre a rede Tor.
+
+5. SEM GARANTIAS
+   O SOFTWARE É FORNECIDO "COMO ESTÁ", SEM GARANTIA DE QUALQUER TIPO.
+   OS AUTORES NÃO SE RESPONSABILIZAM POR DANOS DIRETOS, INDIRETOS,
+   INCIDENTAIS OU CONSEQUENTES RESULTANTES DO USO DESTE SOFTWARE.
+
+6. PRIVACIDADE E REDE DESCENTRALIZADA (LOBBY GLOBAL)
+   Para facilitar a descoberta de usuários e viabilizar a arquitetura P2P,
+   este software se comunica automaticamente de forma anônima com um Servidor
+   Rastreador (Tracker Server). 
+   
+   a) Um Identificador Criptográfico Anônimo (UUID) é gerado e mantido privado localmente.
+   b) O Tracker registra quantas instâncias estão ativas sem associar IPs reais (oculto pelo Tor).
+   c) Todos os arquivos (Links Onion, Nome e Tamanho) que você adicionar no aplicativo
+      ficarão publicamente expostos no "Lobby Público" (aba Buscar) do software, para 
+      permitir a visualização de outros nós conectados na rede.
+   
+   O Tracker atua como Confiança Zero (Zero Trust) e não realiza identificações de Hardware
+   ou Geo-localização. Ele serve apenas para indexar Links e Online Users de forma segura.
+
+7. CÓDIGO ABERTO
+   Este software é distribuído sob a Licença MIT. O código-fonte está
+   disponível em: https://github.com/DJmesh/onion_poc
+
+══════════════════════════════════════════════════════════════════════
+Role até o final e pressione [Y] ou [Enter] para aceitar e continuar.
+Pressione [Q] para sair sem aceitar.
+══════════════════════════════════════════════════════════════════════
