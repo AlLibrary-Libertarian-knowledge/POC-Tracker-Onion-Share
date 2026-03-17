@@ -5,7 +5,7 @@ use anyhow::Context;
 use memmap2::Mmap;
 use uuid::Uuid;
 
-use crate::crypto::{encrypt_chunk, FileKey};
+use crate::crypto::{content_hash_hex, encrypt_chunk, key_from_content_hash, FileKey};
 
 #[derive(Clone)]
 pub struct Share {
@@ -15,12 +15,13 @@ pub struct Share {
     pub chunk_size: usize,
     pub total_chunks: u64,
     pub key: FileKey,
+    pub content_hash: String,
 
     mmap: std::sync::Arc<Mmap>,
 }
 
 impl Share {
-    pub fn new(file_path: PathBuf, chunk_size: usize, key: FileKey) -> anyhow::Result<Self> {
+    pub fn new(file_path: PathBuf, chunk_size: usize) -> anyhow::Result<Self> {
         anyhow::ensure!(
             chunk_size >= 16 * 1024,
             "chunk_size too small (>= 16 KiB suggested)"
@@ -43,6 +44,9 @@ impl Share {
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| "shared.bin".to_string());
 
+        let content_hash = content_hash_hex(&mmap[..]);
+        let key = key_from_content_hash(&content_hash)?;
+
         Ok(Self {
             file_id: Uuid::new_v4(),
             file_name,
@@ -50,6 +54,7 @@ impl Share {
             chunk_size,
             total_chunks,
             key,
+            content_hash,
             mmap: std::sync::Arc::new(mmap),
         })
     }
