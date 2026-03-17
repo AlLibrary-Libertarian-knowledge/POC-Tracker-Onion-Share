@@ -34,6 +34,7 @@ pub struct DownloadState {
     pub is_done: bool,
     pub error: Option<String>,
     pub speed_bytes_per_sec: u64,
+    pub eta_seconds: Option<u64>,
     pub start_time: Option<Instant>,
 }
 
@@ -126,6 +127,16 @@ impl SharedState {
             format!("{:.1} KB", b as f64 / KB as f64)
         } else {
             format!("{} B", b)
+        }
+    }
+
+    pub fn fmt_duration(secs: u64) -> String {
+        if secs >= 3600 {
+            format!("{}h {}m", secs / 3600, (secs % 3600) / 60)
+        } else if secs >= 60 {
+            format!("{}m {}s", secs / 60, secs % 60)
+        } else {
+            format!("{}s", secs)
         }
     }
 }
