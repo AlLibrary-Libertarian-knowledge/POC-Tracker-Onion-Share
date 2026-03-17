@@ -317,13 +317,14 @@ fn spawn_download_task(
             is_done: false,
             error: None,
             speed_bytes_per_sec: 0,
+            eta_seconds: None,
             start_time: None,
         });
     }
 
     tokio::spawn(async move {
         macro_rules! update {
-            ($p:expr, $bd:expr, $tb:expr, $n:expr, $st:expr, $err:expr, $done:expr, $spd:expr, $start:expr) => {
+            ($p:expr, $bd:expr, $tb:expr, $n:expr, $st:expr, $err:expr, $done:expr, $spd:expr, $start:expr, $eta:expr) => {
                 if let Some(dl) = shared.lock().unwrap().active_downloads.iter_mut().find(|d| d.id == dl_id) {
                     if let Some(p) = $p { dl.progress = p; }
                     if let Some(bd) = $bd { dl.bytes_downloaded = bd; }
@@ -334,6 +335,7 @@ fn spawn_download_task(
                     if let Some(done) = $done { dl.is_done = done; }
                     if let Some(spd) = $spd { dl.speed_bytes_per_sec = spd; }
                     if let Some(start) = $start { dl.start_time = Some(start); }
+                    if let Some(eta) = $eta { dl.eta_seconds = eta; }
                 }
             };
         }
@@ -341,13 +343,13 @@ fn spawn_download_task(
         let parsed = match crate::link::parse_any(&link_str) {
             Ok(p) => p,
             Err(e) => {
-                update!(None, None, None, None, Some("Erro no link".into()), Some(e.to_string()), None, None, None);
+                update!(None, None, None, None, Some("Erro no link".into()), Some(e.to_string()), None, None, None, None);
                 return;
             }
         };
 
         let start_t = std::time::Instant::now();
-        update!(Some(0.0), Some(0), Some(0), None, Some("Preparando download...".into()), None, None, Some(0), Some(start_t));
+        update!(Some(0.0), Some(0), Some(0), None, Some("Preparando download...".into()), None, None, Some(0), Some(start_t), None);
 
         let result: anyhow::Result<()> = async {
             match parsed {
@@ -362,7 +364,7 @@ fn spawn_download_task(
                         .json()
                         .await?;
 
-                    update!(Some(0.0), Some(0), Some(manifest.file_size), Some(manifest.file_name.clone()), Some("Baixando direto do peer...".into()), None, None, Some(0), None);
+                    update!(Some(0.0), Some(0), Some(manifest.file_size), Some(manifest.file_name.clone()), Some("Baixando direto do peer...".into()), None, None, Some(0), None, None);
                     tokio::fs::create_dir_all(&out_dir).await.ok();
                     let out_path = out_dir.join(&manifest.file_name);
                     let mut out_file = tokio::fs::File::create(&out_path).await?;
@@ -381,7 +383,8 @@ fn spawn_download_task(
                         let prg = (idx + 1) as f32 / manifest.total_chunks.max(1) as f32;
                         let elapsed = start_t.elapsed().as_secs_f64().max(0.001);
                         let speed = (downloaded as f64 / elapsed) as u64;
-                        update!(Some(prg), Some(downloaded), Some(manifest.file_size), None, Some("Baixando direto do peer...".into()), None, None, Some(speed), None);
+                        let eta = if speed > 0 { Some((manifest.file_size - downloaded) / speed) } else { None };
+                        update!(Some(prg), Some(downloaded), Some(manifest.file_size), None, Some("Baixando direto do peer...".into()), None, None, Some(speed), None, Some(eta));
                     }
                     tokio::io::AsyncWriteExt::flush(&mut out_file).await?;
                 }
@@ -417,7 +420,7 @@ fn spawn_download_task(
                         .await?;
 
                     let key = crate::crypto::key_from_content_hash(&network_file.content_hash)?;
-                    update!(Some(0.0), Some(0), Some(manifest.file_size), Some(manifest.file_name.clone()), Some(format!("Baixando via swarm de {} peers...", network_file.peer_count)), None, None, Some(0), None);
+                    update!(Some(0.0), Some(0), Some(manifest.file_size), Some(manifest.file_name.clone()), Some(format!("Baixando via swarm de {} peers...", network_file.peer_count)), None, None, Some(0), None, None);
                     tokio::fs::create_dir_all(&out_dir).await.ok();
                     let out_path = out_dir.join(&manifest.file_name);
 
@@ -463,7 +466,12 @@ fn spawn_download_task(
                         let prg = done_chunks as f32 / manifest.total_chunks.max(1) as f32;
                         let elapsed = start_t.elapsed().as_secs_f64().max(0.001);
                         let speed = (downloaded as f64 / elapsed) as u64;
-                        update!(Some(prg), Some(downloaded), Some(manifest.file_size), None, Some(format!("Baixando via swarm de {} peers...", network_file.peer_count)), None, None, Some(speed), None);
+                        let eta = if speed > 0 && manifest.file_size > downloaded { 
+                            Some((manifest.file_size - downloaded) / speed) 
+                        } else { 
+                            None 
+                        };
+                        update!(Some(prg), Some(downloaded), Some(manifest.file_size), None, Some(format!("Baixando via swarm de {} peers...", network_file.peer_count)), None, None, Some(speed), None, Some(eta));
                     }
 
                     let mut out_file = tokio::fs::File::create(&out_path).await?;
@@ -478,8 +486,8 @@ fn spawn_download_task(
         }.await;
 
         match result {
-            Ok(()) => update!(Some(1.0), None, None, None, Some("Concluído!".into()), None, Some(true), Some(0), None),
-            Err(e) => update!(None, None, None, None, Some("Falha no download".into()), Some(e.to_string()), None, Some(0), None),
+            Ok(()) => update!(Some(1.0), None, None, None, Some("Concluído!".into()), None, Some(true), Some(0), None, Some(None)),
+            Err(e) => update!(None, None, None, None, Some("Falha no download".into()), Some(e.to_string()), None, Some(0), None, Some(None)),
         }
     });
 }
