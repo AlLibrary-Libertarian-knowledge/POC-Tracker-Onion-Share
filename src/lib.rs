@@ -7,3 +7,5 @@ pub mod server;
 pub mod share;
 pub mod tor;
 pub mod wizard;
+
+pub mod tracker_proto;
