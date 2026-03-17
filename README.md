@@ -77,8 +77,8 @@ O **onion-poc** funciona nos bastidores de forma elegante, dividindo a responsab
 
 No servidor, operam dois contêineres trabalhando em dupla:
 
-*   **O Tracker (O Código em Rust):** Um servidor Web contruído em Axum extremamente leve. Ele não salva absolutamente nenhum arquivo. Seu único papel é ouvir a porta 8080 e gerenciar um "Lobby" em memória RAM: *"O usuário XYZ está online e possui o arquivo 'foto.jpg'"*. Se algum cliente ficar silencioso por 2 minutos, ele o remove da lista.
-*   **A "Capa" do Tor (`tor_service`):** Como o Tracker por si só não se comunica com a rede Tor, este segundo contêiner atua como um **"Porteiro Cego"**. Ele roda o serviço oficial do Tor, cria um endereço secreto `.onion` e intercepta qualquer acesso vindo da DarkWeb. Ele decripta o pacote e repassa para a porta 8080 do Tracker. Graças a ele, o Tracker enxerga apenas requisições locais comuns e não faz ideia do verdadeiro IP que originou a mensagem!
+* **O Tracker (O Código em Rust):** Um servidor Web contruído em Axum extremamente leve. Ele não salva absolutamente nenhum arquivo. Seu único papel é ouvir a porta 8080 e gerenciar um "Lobby" em memória RAM: *"O usuário XYZ está online e possui o arquivo 'foto.jpg'"*. Se algum cliente ficar silencioso por 2 minutos, ele o remove da lista.
+* **A "Capa" do Tor (`tor_service`):** Como o Tracker por si só não se comunica com a rede Tor, este segundo contêiner atua como um **"Porteiro Cego"**. Ele roda o serviço oficial do Tor, cria um endereço secreto `.onion` e intercepta qualquer acesso vindo da DarkWeb. Ele decripta o pacote e repassa para a porta 8080 do Tracker. Graças a ele, o Tracker enxerga apenas requisições locais comuns e não faz ideia do verdadeiro IP que originou a mensagem!
 
 Essa dupla garante um "ponto de encontro" eficiente sem comprometer a identidade física de ninguém.
 
@@ -88,17 +88,17 @@ Quando você executa o `onion_poc.exe` (ou as versões em .deb e macOS) no seu c
 
 #### 🚇 Inicializando o "Motor" Local
 
-*   O seu aplicativo inicia de forma invisível um nó do Tor local em segundo plano.
-*   Ele rapidamente "cava um túnel" criptografado diretamente para a rede mundial do Tor.
-*   O seu computador ganha seu próprio URL `.onion`. Se você compartilha um arquivo, sua máquina se torna um mini-servidor invisível preparado para transferir **Chunks (pedaços)**.
+* O seu aplicativo inicia de forma invisível um nó do Tor local em segundo plano.
+* Ele rapidamente "cava um túnel" criptografado diretamente para a rede mundial do Tor.
+* O seu computador ganha seu próprio URL `.onion`. Se você compartilha um arquivo, sua máquina se torna um mini-servidor invisível preparado para transferir **Chunks (pedaços)**.
 
 #### 💓 O Batimento Cardíaco (Aba global de Busca)
 
 Existe um loop silencioso (no `src/gui/bg.rs`) rodando a cada 5 segundos:
 
-*   **Ping (Avisando que estou vivo):** O aplicativo coleta a sua lista de arquivos públicos, converte num JSON e trafega de fininho pelo túnel (Socks5) até o Tracker `.onion` remoto: *"Eaí Tracker, sou o Usuário 1234, ainda tô aqui e tenho os arquivos A e B."*
-*   **Fetch (Lendo o Radar):** Imediatamente, ele solicita: *"Me manda a lista de quem mais tá online"*. O Tracker responde com a lista global em posse de todas as máquinas conectadas.
-*   **Injeção ao Vivo:** A tela Egui é atualizada na "Limbo/Search" piscando em tempo real.
+* **Ping (Avisando que estou vivo):** O aplicativo coleta a sua lista de arquivos públicos, converte num JSON e trafega de fininho pelo túnel (Socks5) até o Tracker `.onion` remoto: *"Eaí Tracker, sou o Usuário 1234, ainda tô aqui e tenho os arquivos A e B."*
+* **Fetch (Lendo o Radar):** Imediatamente, ele solicita: *"Me manda a lista de quem mais tá online"*. O Tracker responde com a lista global em posse de todas as máquinas conectadas.
+* **Injeção ao Vivo:** A tela Egui é atualizada na "Limbo/Search" piscando em tempo real.
 
 #### 📥 Download e Transferência Exclusiva Ponto-a-Ponto
 
@@ -110,7 +110,7 @@ Aqui está o grande diferencial: **o Tracker jamais trafega arquivos!** Ele apen
 
 ### 🎭 Resumo da Ópera
 
-O Tracker funciona como o painel de **Classificados** de um jornal anônimo – ele anuncia quem tem o quê. Mas o verdadeiro leilão e as entregas ocorrem de forma rigorosa, secreta e **criptografada Ponto-a-Ponto de Máquina A para Máquina B**, furando firewalls naturalmente sem necessidade de liberar portas de modem ou ter IP fixo. 
+O Tracker funciona como o painel de **Classificados** de um jornal anônimo – ele anuncia quem tem o quê. Mas o verdadeiro leilão e as entregas ocorrem de forma rigorosa, secreta e **criptografada Ponto-a-Ponto de Máquina A para Máquina B**, furando firewalls naturalmente sem necessidade de liberar portas de modem ou ter IP fixo.
 
 Toda essa orquestra militar dentro de **um binário veloz de interface limpa!** 🚀
 
@@ -211,6 +211,7 @@ Veja [CHANGELOG.md](CHANGELOG.md) para histórico completo de versões.
 
 | Versão | Data | Destaque |
 |---|---|---|
+| **0.7.0** | 2026-03-17 | **Tracker WebSocket & Swarm Download** — lobby bi-direcional e download multi-peer por hash |
 | **0.6.1** | 2026-03-03 | Busca em tempo real e Correção da Bridge Docker no Tracker |
 | **0.6.0** | 2026-03-03 | Rede Decentralizada: Servidor Rastreador (Tracker) e aba de Lobby/Busca global implementada |
 | **0.5.0** | 2026-03-03 | Painel de Download nativo operando com socks_addr Tor em background (velocidade real) |
@@ -228,16 +229,15 @@ Veja [CHANGELOG.md](CHANGELOG.md) para histórico completo de versões.
 MIT — Eduardo Prestes, 2024.  
 Repositório: [github.com/DJmesh/onion_poc](https://github.com/DJmesh/onion_poc)
 
-
 ## Swarm PoC update
 
 This version adds a tracker-driven swarm proof of concept:
 
-- shared files now derive a deterministic BLAKE3 content hash
-- equal files across different peers are grouped by the same hash on the tracker
-- the tracker exposes a WebSocket lobby for live availability updates
-- search results are aggregated by content hash and display peer count
-- downloads triggered from the lobby use a swarm link and can fetch chunks from multiple peers sharing the same file
+* shared files now derive a deterministic BLAKE3 content hash
+* equal files across different peers are grouped by the same hash on the tracker
+* the tracker exposes a WebSocket lobby for live availability updates
+* search results are aggregated by content hash and display peer count
+* downloads triggered from the lobby use a swarm link and can fetch chunks from multiple peers sharing the same file
 
 ### Default local tracker
 

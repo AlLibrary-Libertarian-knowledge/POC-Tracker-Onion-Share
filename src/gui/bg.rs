@@ -502,7 +502,7 @@ fn tracker_ws_url(tracker_url: &str) -> String {
 
 async fn tracker_ws_loop(shared: SharedStateRef) {
     loop {
-        let (tor_active, onion_addr, socks_addr, tracker_url) = {
+        let (tor_active, onion_addr, _socks_addr, tracker_url) = {
             let s = shared.lock().unwrap();
             let cfg = AppConfig::load();
             (

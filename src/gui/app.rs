@@ -1,11 +1,9 @@
 /// GUI principal do onion-poc — egui/eframe
-/// v0.3.1: paleta corrigida, file dialog não-bloqueante, auto-start Tor pós-termos
-use std::sync::{Arc, Mutex};
+/// v0.7.0: paleta corrigida, file dialog não-bloqueante, auto-start Tor pós-termos, WebSocket support
 use std::time::{Duration, Instant};
 
 use egui::{Color32, FontId, RichText, Stroke, Vec2};
-use uuid::Uuid;
-
+// use uuid::Uuid;
 use crate::config::AppConfig;
 
 use super::shared::{GuiControl, SharedFileInfo, SharedStateRef, TorInitState};
@@ -1048,7 +1046,7 @@ impl GuiApp {
     fn draw_search(
         &mut self,
         ui: &mut egui::Ui,
-        network_files: &[crate::gui::shared::NetworkFile],
+        network_files: &[crate::tracker_proto::NetworkFile],
     ) {
         ui.horizontal(|ui| {
             ui.label(
@@ -1129,12 +1127,17 @@ impl GuiApp {
                                         .stroke(Stroke::new(1.0, C_BORDER));
                                     if ui.add(btn).clicked() {
                                         self.view = View::Download;
-                                        let tracker_url = crate::config::AppConfig::load().tracker_url;
+                                        let tracker_url =
+                                            crate::config::AppConfig::load().tracker_url;
                                         self.download_link_input = crate::link::SwarmLink {
                                             tracker_url,
                                             content_hash: f.content_hash.clone(),
-                                        }.to_string();
-                                        self.set_status("Swarm link preparado para Download!", C_GREEN);
+                                        }
+                                        .to_string();
+                                        self.set_status(
+                                            "Swarm link preparado para Download!",
+                                            C_GREEN,
+                                        );
                                     }
                                 },
                             );
@@ -1214,7 +1217,7 @@ impl GuiApp {
         .show(ctx, |ui| {
             let scroll_output = egui::ScrollArea::vertical()
                 .max_height(300.0)
-                .id_source("terms_scroll")
+                .id_salt("terms_scroll")
                 .show(ui, |ui| {
                     ui.label(
                         RichText::new(crate::wizard::app::App::TERMS_TEXT)
