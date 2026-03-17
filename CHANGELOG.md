@@ -5,6 +5,19 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) | Versionin
 
 ---
 
+## [0.7.3] — 2026-03-17
+
+### ✨ Adicionado
+
+- **Tracker Debug Route** — Nova rota `/debug/nodes` no tracker para monitorar conexões ativas e IDs de nós.
+- **Docker Monitoring** — Inclusão do `curl` na imagem Docker do tracker para facilitar o troubleshooting local.
+
+### 🔧 Corrigido
+
+- **Importação de Módulos Binários** — Correção da resolução do módulo `tracker_proto` que causava falha na compilação do binário final.
+- **Destaque de Produção** — URL do Tracker atualizada para o endereço Onion oficial de produção.
+- **Melhoria no Deploy** — Remoção de campos obsoletos no `docker-compose.yml` e instruções claras sobre colisão de `node_id`.
+
 ## [0.7.0] — 2026-03-17
 
 ### ✨ Adicionado
