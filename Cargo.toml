@@ -1,6 +1,6 @@
 [package]
 name = "onion_poc"
-version = "0.7.0"
+version = "0.7.3"
 edition = "2021"
 license = "MIT"
 description = "TCC PoC: OnionShare-like encrypted chunk sharing over Tor onion service (Rust)."
