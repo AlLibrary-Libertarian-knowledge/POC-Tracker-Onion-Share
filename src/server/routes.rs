@@ -19,10 +19,9 @@ pub fn router(state: AppState) -> Router {
         .route("/s/:id/ping", post(ping))
         .route("/s/:id/presence", get(presence))
         .route("/files", get(list_files))
+        .route("/network/gossip", get(gossip))
         .with_state(state)
 }
-
-// ─── Tipos de resposta ─────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Manifest {
@@ -32,6 +31,8 @@ pub struct Manifest {
     pub chunk_size: usize,
     pub total_chunks: u64,
     pub cipher: String,
+    pub content_hash: String,
+    pub chunk_hashes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,6 +42,7 @@ pub struct FileEntry {
     pub file_size: u64,
     pub total_chunks: u64,
     pub cipher: String,
+    pub content_hash: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,9 +60,6 @@ pub struct PresenceResponse {
     pub online: usize,
 }
 
-// ─── Handlers ─────────────────────────────────────────────────────────────
-
-/// GET /files — lista todos os arquivos disponíveis (para clientes buscarem)
 async fn list_files(State(state): State<AppState>) -> Json<Vec<FileEntry>> {
     let shares = state.shares.lock().await;
     let entries = shares
@@ -71,12 +70,12 @@ async fn list_files(State(state): State<AppState>) -> Json<Vec<FileEntry>> {
             file_size: s.file_size,
             total_chunks: s.total_chunks,
             cipher: "XChaCha20-Poly1305".into(),
+            content_hash: s.content_hash.clone(),
         })
         .collect();
     Json(entries)
 }
 
-/// GET /s/:id/manifest
 async fn manifest(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -92,10 +91,11 @@ async fn manifest(
         chunk_size: share.chunk_size,
         total_chunks: share.total_chunks,
         cipher: "XChaCha20-Poly1305".into(),
+        content_hash: share.content_hash.clone(),
+        chunk_hashes: share.chunk_hashes.clone(),
     }))
 }
 
-/// GET /s/:id/chunk/:idx — chunk cifrado
 async fn chunk(
     State(state): State<AppState>,
     Path((id, idx)): Path<(Uuid, u64)>,
@@ -112,7 +112,6 @@ async fn chunk(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let bytes_len = ct.len() as u64;
-    // Registra estatísticas sem bloquear a resposta
     tokio::spawn(async move {
         state.record_bytes(bytes_len).await;
     });
@@ -122,12 +121,10 @@ async fn chunk(
     Ok((headers, Bytes::from(ct)).into_response())
 }
 
-/// POST /s/:id/register
 async fn register(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<RegisterResponse>, StatusCode> {
-    // Verifica se o arquivo existe
     {
         let shares = state.shares.lock().await;
         if !shares.contains_key(&id) {
@@ -138,7 +135,6 @@ async fn register(
     Ok(Json(RegisterResponse { session_id }))
 }
 
-/// POST /s/:id/ping
 async fn ping(
     State(state): State<AppState>,
     Path(_id): Path<Uuid>,
@@ -148,11 +144,32 @@ async fn ping(
     StatusCode::NO_CONTENT
 }
 
-/// GET /s/:id/presence
 async fn presence(
     State(state): State<AppState>,
     Path(_id): Path<Uuid>,
 ) -> Json<PresenceResponse> {
     let online = state.online_count().await;
     Json(PresenceResponse { online })
+}
+
+async fn gossip(State(state): State<AppState>) -> Json<crate::tracker_proto::GossipMessage> {
+    let shares = state.shares.lock().await;
+    let onion = state.onion_addr.lock().await.clone().unwrap_or_default();
+    let files = shares
+        .values()
+        .map(|s| crate::tracker_proto::AnnouncedFile {
+            file_id: s.file_id,
+            name: s.file_name.clone(),
+            size: s.file_size,
+            link: format!("http://{}/s/{}/manifest", onion, s.file_id), // Gera o link completo
+            content_hash: s.content_hash.clone(),
+        })
+        .collect();
+
+    Json(crate::tracker_proto::GossipMessage {
+        node_id: state.node_id.clone(),
+        onion,
+        files,
+        known_peers: Vec::new(), // Por enquanto
+    })
 }

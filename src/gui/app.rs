@@ -371,7 +371,7 @@ impl eframe::App for GuiApp {
             ctx,
             tor_active,
             &onion_addr,
-            global_lobby.online_nodes.max(1), // Pelo menos o usuário mesmo se offline do tracker
+            global_lobby.online_nodes.max(1), // Pelo menos o usuário local na descoberta LAN
             &uptime,
         );
         self.draw_sidebar(ctx, tor_active);
@@ -388,7 +388,7 @@ impl eframe::App for GuiApp {
                     ui,
                     tor_active,
                     &onion_addr,
-                    global_lobby.online_nodes.max(1), // Sessões online ativas globalmente
+                    global_lobby.online_nodes.max(1), // Nós ativos na descoberta descentralizada
                     &uptime,
                     total_sessions,
                     total_bytes,
@@ -1148,10 +1148,7 @@ impl GuiApp {
                                         .clicked()
                                     {
                                         self.view = View::Download;
-                                        let tracker_url =
-                                            crate::config::AppConfig::load().tracker_url;
                                         self.download_link_input = crate::link::SwarmLink {
-                                            tracker_url,
                                             content_hash: f.content_hash.clone(),
                                         }
                                         .to_string();

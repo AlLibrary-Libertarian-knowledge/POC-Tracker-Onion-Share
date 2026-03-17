@@ -30,10 +30,12 @@ pub struct AppState {
     /// Broadcast da contagem online (TUI consome via .subscribe())
     online_tx: Arc<watch::Sender<usize>>,
     pub online_rx: watch::Receiver<usize>,
+    pub node_id: String,
+    pub onion_addr: Arc<Mutex<Option<String>>>,
 }
 
 impl AppState {
-    pub fn new() -> Self {
+    pub fn new(node_id: String) -> Self {
         let (online_tx, online_rx) = watch::channel(0usize);
         Self {
             shares: Arc::new(Mutex::new(HashMap::new())),
@@ -42,6 +44,8 @@ impl AppState {
             stats: Arc::new(Mutex::new(GlobalStats::default())),
             online_tx: Arc::new(online_tx),
             online_rx,
+            node_id,
+            onion_addr: Arc::new(Mutex::new(None)),
         }
     }
 

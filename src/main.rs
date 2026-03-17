@@ -1,13 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod config;
 mod crypto;
+mod discovery;
 mod gui;
 mod link;
 mod server;
 mod share;
 mod tor;
-mod wizard; // mantido para installer + TERMS_TEXT
 mod tracker_proto;
+mod wizard; // mantido para installer + TERMS_TEXT
 
 use std::path::PathBuf;
 

@@ -49,3 +49,12 @@ pub enum WsClientMessage {
 pub enum WsServerMessage {
     Lobby { lobby: NetworkLobby },
 }
+
+/// Mensagens para troca direta entre nós (Gossip P2P)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GossipMessage {
+    pub node_id: String,
+    pub onion: String,
+    pub files: Vec<AnnouncedFile>,
+    pub known_peers: Vec<String>, // Lista de Onion addresses conhecidos
+}

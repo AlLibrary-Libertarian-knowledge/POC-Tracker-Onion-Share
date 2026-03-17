@@ -16,6 +16,7 @@ pub struct Share {
     pub total_chunks: u64,
     pub key: FileKey,
     pub content_hash: String,
+    pub chunk_hashes: Vec<String>,
 
     mmap: std::sync::Arc<Mmap>,
 }
@@ -46,6 +47,13 @@ impl Share {
 
         let content_hash = content_hash_hex(&mmap[..]);
         let key = key_from_content_hash(&content_hash)?;
+        let chunk_hashes = (0..total_chunks)
+            .map(|idx| {
+                let start = (idx as usize) * chunk_size;
+                let end = ((idx as usize + 1) * chunk_size).min(mmap.len());
+                content_hash_hex(&mmap[start..end])
+            })
+            .collect();
 
         Ok(Self {
             file_id: Uuid::new_v4(),
@@ -55,6 +63,7 @@ impl Share {
             total_chunks,
             key,
             content_hash,
+            chunk_hashes,
             mmap: std::sync::Arc::new(mmap),
         })
     }

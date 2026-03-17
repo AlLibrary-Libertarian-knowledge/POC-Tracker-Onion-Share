@@ -1,5 +1,7 @@
 # 🧅 onion-poc
 
+> **Build v0.8.0 descentralizada P2P (Gossip over Tor):** esta versão implementa uma rede puramente ponto-a-ponto. A descoberta de arquivos acontece via UDP multicast na rede local e via protocolo Gossip sobre Tor na rede global, sem depender de um servidor central fixo.
+
 > **TCC PoC** — Compartilhamento seguro de arquivos via Tor Onion Service, implementado 100% em Rust.
 
 [![CI/Release](https://github.com/DJmesh/onion_poc/actions/workflows/build.yml/badge.svg)](https://github.com/DJmesh/onion_poc/actions)
@@ -25,8 +27,8 @@
 
 ## 🚀 Download Automático (Builds Oficiais)
 
-Baixe a versão **v0.7.5 (UX & Real-time Update)** compilada para Windows, Linux e macOS:
-👉 **[Baixar onion-poc v0.7.5 (GitHub Releases)](https://github.com/DJmesh/onion_poc/releases/latest)**
+Baixe a versão **v0.8.0 (Rede Descentralizada)** compilada para Windows, Linux e macOS:
+👉 **[Baixar onion-poc v0.8.0 (GitHub Releases)](https://github.com/DJmesh/onion_poc/releases/latest)**
 
 ---
 
@@ -70,32 +72,31 @@ chmod +x onion_poc-macos-universal
 
 ---
 
-## 🏗️ Como a Mágica Acontece? (A Arquitetura P2P + Tracker)
+## 🏗️ Como a Mágica Acontece? (A Arquitetura P2P Descentralizada)
 
-O **onion-poc** funciona nos bastidores de forma elegante, dividindo a responsabilidade em duas partes principais: **A Bússola da Rede (O Servidor)** e **O Aplicativo Ponto-a-Ponto (Os Clientes)**. Inspirada na filosofia BitTorrent e Web3, a arquitetura garante segurança e anonimato máximos através da rede Tor.
+O **onion-poc v0.8.0** marca a transição para uma rede totalmente descentralizada. Não existe mais um "servidor central" (Tracker) obrigatório. Cada instância do aplicativo atua simultaneamente como cliente e servidor (Node), colaborando para manter o mapa da rede (Lobby) ativo.
 
-### 🧭 1. O Lado do Servidor: A Bússola da Rede (Docker)
+### 🧭 1. Descoberta Híbrida (LAN + WAN)
 
-No servidor, operam dois contêineres trabalhando em dupla:
+Para encontrar quem tem o arquivo que você busca, o aplicativo usa dois caminhos:
 
-* **O Tracker (O Código em Rust):** Um servidor Web contruído em Axum extremamente leve. Ele não salva absolutamente nenhum arquivo. Seu único papel é ouvir a porta 8080 e gerenciar um "Lobby" em memória RAM: *"O usuário XYZ está online e possui o arquivo 'foto.jpg'"*. Se algum cliente ficar silencioso por 2 minutos, ele o remove da lista.
-* **A "Capa" do Tor (`tor_service`):** Como o Tracker por si só não se comunica com a rede Tor, este segundo contêiner atua como um **"Porteiro Cego"**. Ele roda o serviço oficial do Tor, cria um endereço secreto `.onion` e intercepta qualquer acesso vindo da DarkWeb. Ele decripta o pacote e repassa para a porta 8080 do Tracker. Graças a ele, o Tracker enxerga apenas requisições locais comuns e não faz ideia do verdadeiro IP que originou a mensagem!
-
-Essa dupla garante um "ponto de encontro" eficiente sem comprometer a identidade física de ninguém.
+* **Rede Local (LAN):** Usa **UDP Multicast**. O app envia um sinal "estou aqui" para um grupo IP específico na rede local. Todos os outros usuários na mesma rede (casa ou escritório) ouvem e trocam listas de arquivos instantaneamente, sem precisar passar pela internet.
+* **Rede Global (WAN):** Usa o **Protocolo Gossip sobre Tor**. O aplicativo se conecta a "nós conhecidos" (Bootstrap Peers) via endereços `.onion`. Ele pergunta: *"Quem você conhece e o que eles têm?"*. A resposta é integrada ao seu lobby local e você passa a conhecer novos peers, criando uma teia de descobertas anônima e sem ponto único de falha.
 
 ### ✨ 2. O Lado do Cliente: Onde a Mágica Acontece (App GUI)
 
-Quando você executa o `onion_poc.exe` (ou as versões em .deb e macOS) no seu computador, o espetáculo começa:
+Quando você executa o `onion_poc.exe` no seu computador:
 
-#### 🚇 Inicializando o "Motor" Local
+#### 🚇 Túneis Invisíveis
 
-* O seu aplicativo inicia de forma invisível um nó do Tor local em segundo plano.
-* Ele rapidamente "cava um túnel" criptografado diretamente para a rede mundial do Tor.
-* O seu computador ganha seu próprio URL `.onion`. Se você compartilha um arquivo, sua máquina se torna um mini-servidor invisível preparado para transferir **Chunks (pedaços)**.
+* O aplicativo inicia um nó do Tor local e "cava um túnel" criptografado.
+* Seu computador ganha seu próprio URL `.onion`. Se você compartilha um arquivo, sua máquina se torna um mini-servidor invisível preparado para transferir **Chunks (pedaços)**.
 
-#### 💓 O Batimento Cardíaco (Aba global de Busca)
+#### 💓 O "Gossip" (Sincronização P2P)
 
-Existe um loop silencioso (no `src/gui/bg.rs`) rodando a cada 5 segundos:
+* Existe um loop de background (`src/discovery.rs`) que roda em paralelo.
+* **LAN:** A cada 4 segundos, anuncia seus arquivos via Multicast.
+* **WAN:** A cada 45 segundos, sorteia peers conhecidos e sincroniza o estado da rede via Tor SOCKS5 Proxy.
 
 * **Ping (Avisando que estou vivo):** O aplicativo coleta a sua lista de arquivos públicos, converte num JSON e trafega de fininho pelo túnel (Socks5) até o Tracker `.onion` remoto: *"Eaí Tracker, sou o Usuário 1234, ainda tô aqui e tenho os arquivos A e B."*
 * **Fetch (Lendo o Radar):** Imediatamente, ele solicita: *"Me manda a lista de quem mais tá online"*. O Tracker responde com a lista global em posse de todas as máquinas conectadas.

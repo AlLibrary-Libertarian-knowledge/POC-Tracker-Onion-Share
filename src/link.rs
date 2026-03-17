@@ -1,6 +1,4 @@
 use anyhow::Context;
-use base64::Engine;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use url::Url;
 use uuid::Uuid;
 
@@ -15,7 +13,6 @@ pub struct ShareLink {
 
 #[derive(Clone, Debug)]
 pub struct SwarmLink {
-    pub tracker_url: String,
     pub content_hash: String,
 }
 
@@ -59,8 +56,7 @@ impl ShareLink {
 
 impl SwarmLink {
     pub fn to_string(&self) -> String {
-        let encoded_tracker = URL_SAFE_NO_PAD.encode(self.tracker_url.as_bytes());
-        format!("opocswarm://swarm/{}#{}", self.content_hash, encoded_tracker)
+        format!("opocswarm://swarm/{}", self.content_hash)
     }
 
     pub fn parse(s: &str) -> anyhow::Result<Self> {
@@ -73,10 +69,7 @@ impl SwarmLink {
             .next()
             .context("swarm link missing content hash")?
             .to_string();
-        let fragment = url.fragment().context("swarm link missing tracker fragment")?;
-        let tracker_url = String::from_utf8(URL_SAFE_NO_PAD.decode(fragment).context("invalid tracker encoding")?)
-            .context("tracker URL is not utf-8")?;
-        Ok(Self { tracker_url, content_hash })
+        Ok(Self { content_hash })
     }
 }
 

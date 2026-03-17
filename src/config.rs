@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct AppConfig {
     /// Usuário aceitou os termos de uso
     pub terms_accepted: bool,
@@ -11,10 +12,16 @@ pub struct AppConfig {
     pub tor_path: String,
     /// ID anônimo deste nó
     pub node_id: String,
-    /// URL do servidor tracker (padrão local para teste)
+    /// Campo legado para compatibilidade com builds antigas
     pub tracker_url: String,
     /// Se true, arquivos compartilhados vão para o lobby público
     pub share_publicly: bool,
+    /// Endereço multicast usado para descoberta LAN descentralizada
+    pub discovery_multicast_addr: String,
+    /// Porta UDP usada para descoberta LAN descentralizada
+    pub discovery_port: u16,
+    /// Lista de endereços Onion confiáveis (Bootstrap Nodes) para a rede global
+    pub bootstrap_peers: Vec<String>,
 }
 
 impl Default for AppConfig {
@@ -23,9 +30,13 @@ impl Default for AppConfig {
             terms_accepted: false,
             tor_path: String::new(),
             node_id: uuid::Uuid::new_v4().to_string(),
-            tracker_url: "http://3phps2siiwstimug2mipw7tlizdvdmfydjf5clb7phujg4yfnkrh56qd.onion"
-                .to_string(),
+            tracker_url: String::new(), // Obsoleto na v0.8
             share_publicly: true,
+            discovery_multicast_addr: "239.255.77.77".to_string(),
+            discovery_port: 41075,
+            bootstrap_peers: vec![
+                "http://zxcy4abcedfg...xyz.onion".to_string(), // Exemplo de bootstrap
+            ],
         }
     }
 }
@@ -74,6 +85,10 @@ impl AppConfig {
 
     pub fn effective_tor_path(&self) -> String {
         self.tor_bin().to_string()
+    }
+
+    pub fn discovery_multicast_socket(&self) -> String {
+        format!("{}:{}", self.discovery_multicast_addr, self.discovery_port)
     }
 
     /// Diretório de dados para o Tor bundled (Windows)

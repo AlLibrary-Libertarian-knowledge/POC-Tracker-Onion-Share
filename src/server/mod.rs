@@ -33,7 +33,7 @@ pub struct ShareServerHandle {
 
 impl ShareServerHandle {
     /// Inicia o servidor HTTP + Tor, retorna quando o Onion Service está pronto.
-    pub async fn start(tor_path: &str) -> anyhow::Result<Self> {
+    pub async fn start(tor_path: &str, node_id: String) -> anyhow::Result<Self> {
         // 1. Bind do listener local
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
@@ -41,7 +41,7 @@ impl ShareServerHandle {
         let local_addr = listener.local_addr()?;
         let local_port = local_addr.port();
 
-        let app_state = AppState::new();
+        let app_state = AppState::new(node_id);
         let app: Router = routes::router(app_state.clone());
 
         let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
@@ -60,6 +60,11 @@ impl ShareServerHandle {
         let mut ctl = TorControl::connect(tor.control_addr(), tor.cookie_path()).await?;
         let service_id = ctl.add_onion(local_port).await?;
         let onion_addr = format!("{}.onion", service_id);
+
+        {
+            let mut o = app_state.onion_addr.lock().await;
+            *o = Some(onion_addr.clone());
+        }
 
         info!("Onion service ready: {}", onion_addr);
 
@@ -125,7 +130,8 @@ impl ShareServerHandle {
 // ─────────────────────────────────────────────────────────────────────────────
 
 pub async fn run_share_server(share: Share, tor_path: String) -> anyhow::Result<()> {
-    let handle = ShareServerHandle::start(&tor_path).await?;
+    let node_id = uuid::Uuid::new_v4().to_string();
+    let handle = ShareServerHandle::start(&tor_path, node_id).await?;
     let link = handle.link_for(&share);
 
     handle.state.add_share(share.clone()).await;

@@ -100,6 +100,9 @@ pub struct SharedState {
     // Lobby global (preenchido se o tracker estiver ativo)
     pub global_lobby: NetworkLobby,
 
+    // Nós conhecidos (Onion Addresses) para o Gossip
+    pub known_peers: Vec<String>,
+
     // Fila de comandos (GUI escreve, background consome)
     pub control_queue: Vec<GuiControl>,
 }

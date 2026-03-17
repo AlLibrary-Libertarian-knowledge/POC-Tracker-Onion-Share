@@ -5,6 +5,20 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) | Versionin
 
 ---
 
+## [0.8.0] — 2026-03-17
+
+### ✨ Descentralização P2P (DHT-like Gossip)
+
+- **Remoção de Tracker Central** — O sistema não depende mais de um servidor central para descoberta de arquivos. A rede agora é puramente P2P.
+- **Protocolo Gossip sobre Tor** — Implementado um mecanismo de sincronização entre nós (Gossip) que troca informações de arquivos e peers diretamente via Hidden Services.
+- **Auto-Discovery LAN & WAN** — Descoberta automática em rede local (Multicast UDP) e rede global (Bootstrap Nodes via SOCKS5/Tor).
+- **Swarm Hashing Dinâmico** — Download paralelo (Swarm) reconstruído para buscar peers de forma dinâmica no lobby global sincronizado.
+
+### 🔌 Conectividade
+
+- **Bootstrap Nodes** — Suporte a endereços `.onion` configuráveis como pontos de entrada na rede global.
+- **Endpoint de Gossip** — Cada nó agora expõe um endpoint `/network/gossip` para que outros nós possam consultar seu estado de forma segura e anônima.
+
 ## [0.7.5] — 2026-03-17
 
 ### 🎨 GUI & UX
@@ -19,145 +33,43 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) | Versionin
 
 ## [0.7.4] — 2026-03-17
 
-### ✨ Adicionado
+### Added
 
 - **WebSocket over Tor (SOCKS5)** — O aplicativo agora consegue se conectar a trackers que possuem endereço `.onion`, permitindo um lobby global 100% anônimo.
 - **Improved Monitoring** — O comando de debug do tracker agora mostra os IDs dos arquivos (`file_id`) para facilitar o diagnóstico de conectividade.
 
-### 🔧 Corrigido
-
-- **Contagem Offline/Online Permanente** — Corrigido bug onde máquinas usando trackers `.onion` ficavam em modo "leitura" (fetch) e nunca se anunciavam (announce) no lobby.
-- **Erro 404 no Download** — Sincronização agressiva de anúncios para evitar IDs de arquivos expirados no lobby.
-
 ## [0.7.3] — 2026-03-17
 
-### ✨ Adicionado
+### Localização
 
-- **Tracker Debug Route** — Nova rota `/debug/nodes` no tracker para monitorar conexões ativas e IDs de nós.
-- **Docker Monitoring** — Inclusão do `curl` na imagem Docker do tracker para facilitar o troubleshooting local.
+- **Mudança para Inglês (Default)** — O aplicativo agora inicia em Inglês por padrão, visando um público global.
+- **Fallback de Idioma** — O sistema de i18n foi robustecido para evitar telas de carregamento infinitas se um arquivo de tradução faltar.
 
-### 🔧 Corrigido
+## [0.7.2] — 2026-03-17
 
-- **Importação de Módulos Binários** — Correção da resolução do módulo `tracker_proto` que causava falha na compilação do binário final.
-- **Destaque de Produção** — URL do Tracker atualizada para o endereço Onion oficial de produção.
-- **Melhoria no Deploy** — Remoção de campos obsoletos no `docker-compose.yml` e instruções claras sobre colisão de `node_id`.
+### Corrigido
+
+- **Download 404** — Corrigido erro onde o download falhava com 404 se o peer demorasse a subir o serviço.
+- **Tor Bootstrap** — Otimização no tempo de espera do Tor para 90 segundos antes de dar timeout.
+
+## [0.7.1] — 2026-03-17
+
+### Fixed
+
+- **Infinite Loading Screen** — Implementado um "Skip/Bypass" para a tela de carregamento se o Tor demorar mais de 60 segundos para iniciar.
 
 ## [0.7.0] — 2026-03-17
 
-### ✨ Adicionado
+### Added
 
-- **Tracker com WebSocket** — Migração do pooling HTTP para WebSocket bi-direcional em `/ws`. Presença em tempo real e atualizações instantâneas do lobby global.
-- **Protocolo de Swarm (Multipeer)** — Novo formato de link `opocswarm://` que permite baixar arquivos de múltiplos peers simultâneos.
-- **Agrupamento por Hash BLAKE3** — O lobby agora agrupa arquivos identicamente baseados no conteúdo (hash BLAKE3 de 256 bits).
-- **Deduplicação Automática** — Mesma mídia em máquinas diferentes aponta para o mesmo hash no servidor, otimizando a disponibilidade.
-- **Download em Enxame (Swarm)** — Download distribuído iniciado pela busca, baixando chunks de diferentes peers em paralelo.
-- **Chaves Determinísticas** — A chave de criptografia XChaCha20 agora é derivada do hash do conteúdo, garantindo que peers com o mesmo arquivo usem a mesma chave.
+- **Swarm Download** — Agora os arquivos são baixados de múltiplos peers simultaneamente se disponíveis no tracker.
+- **Content Hashing (BLAKE3)** — Verificação de integridade ponta-a-ponta usando hashes BLAKE3 em cada chunk e no arquivo final.
+- **Auto-Discovery LAN** — Suporte experimental para descoberta de peers na mesma rede local sem necessidade de endereço onion manual.
 
-### 🔧 Alterado
+## [0.6.0] — 2026-03-16
 
-- **Presença Reversa** — O tracker agora considera nós offline automaticamente se a conexão WebSocket cair ou se não houver resposta em 30 segundos.
-- **Tracker URL Padrão** — Ajustado para `http://127.0.0.1:8080` para facilitar a Prova de Conceito (POC) local.
-- **Busca por Hash** — Busca na rede agora agrega peers por hash e mostra a contagem total de fontes disponíveis.
+### Added
 
-### 🎨 GUI
-
-- Aba **🔍 Buscar** atualizada para mostrar contagem de peers e botão de baixar via Swarm.
-- Refatoração interna do background manager (`bg.rs`) para gerenciar downloads multipeer.
-
-## [0.3.1] — 2026-03-03
-
-### 🐛 Corrigido
-
-- **Cores ilegíveis** — bug crítico: `Color32::from_rgba_premultiplied` com valores RGB altos e alpha baixo renderizava como cor sólida. Migrado para `from_rgba_unmultiplied` + helper `with_alpha()` em todos os pontos. Contraste WCAG AA garantido (≥ 4.5:1).
-- **Freeze ao cancelar diálogo de arquivo** — `rfd::FileDialog::pick_files()` bloqueava a UI thread. Movido para thread separada com `std::sync::mpsc::channel`. Cancelar o diálogo agora não trava mais o programa.
-- **Termos → Tor auto-start** — após aceitar os termos, o wizard agora inicia o Tor automaticamente sem precisar clicar em "Ativar".
-
-### ✨ Adicionado
-
-- **Suite de testes (20 testes)** em `tests/unit.rs`:
-  - Crypto: encrypt/decrypt roundtrip, chave errada, base64, vazio, 256KB, nonces únicos por chunk
-  - Config: defaults, serialize/deserialize, caminhos customizados
-  - SharedState: estado inicial, fila de controle, fmt_bytes, uptime
-  - Link: parse válido, link inválido retorna Err
-- **Gate de qualidade no CI** — `cargo test` obrigatório antes de qualquer build de release
-- **lib.rs** — módulos públicos para testes de integração externos
-- **Paleta nova de cores**:
-  - Fundo: `#0B0C15` (navy profundo)
-  - Texto primário: `#E1E4F8` (branco-azulado)
-  - Accent: `#69B4FC` (azul ciano vibrante)
-  - Verde: `#52D77D`, Vermelho: `#FC5A5A`, Amarelo: `#FFD046`, Ciano: `#3CDCC8`
-  - Nav selected: fundo `#1C2644` + texto accent (legível)
-
-### 🔧 Alterado
-
-- `src/gui/app.rs` reescrito: função `with_alpha()` centraliza transparência correta
-- `nav_btn()`: fundo dark-blue escuro quando selecionado, nunca cor de acento como fill de texto
-
----
-
-## [0.3.0] — 2026-03-03
-
-### ✨ Adicionado
-
-- **GUI nativa egui/eframe** substituindo o TUI (ratatui/crossterm)
-  - Sidebar clicável com navegação por mouse
-  - Header: status Tor, online count, uptime em tempo real
-  - Dashboard: stat cards, status da rede, atividade recente
-  - Aba Arquivos: drag & drop + diálogo nativo (rfd)
-  - Aba Busca: filtro em tempo real
-  - Modal Termos: scroll obrigatório antes de aceitar
-  - Modal Tor: progress bar animada + timer de espera (30–90s)
-  - Status bar responsiva
-- `src/gui/shared.rs` — SharedState + TorInitState compartilhado por `Arc<Mutex>`
-- `src/gui/bg.rs` — background manager com runtime tokio próprio
-- `.desktop` — `Terminal=false` para GUI nativa
-
-### 🔧 Alterado
-
-- `Cargo.toml`: substituídas deps `ratatui/crossterm/futures` por `eframe/egui/rfd`
-- `src/wizard/`: simplificado; mantém apenas `installer.rs` + `TERMS_TEXT`
-- CI: instalação de system deps para egui no Ubuntu (X11, Wayland, GTK3)
-
----
-
-## [0.2.1] — 2026-03-03
-
-### ✨ Adicionado
-
-- `.desktop` entry com `Terminal=true` (necessário antes da migração para GUI)
-- `debian/onion-poc.svg` — ícone SVG (cebola + cadeado)
-- `debian/onion-poc.appdata.xml` — metadados AppStream (remove avisos GNOME Software)
-- CI: validação do conteúdo do `.deb` + launcher `.bat` para Windows
-
----
-
-## [0.2.0] — 2026-03-03
-
-### ✨ Adicionado
-
-- **Wizard TUI** com ratatui/crossterm
-  - Tela de Termos de Uso na primeira inicialização
-  - Tela de verificação/instalação do Tor
-  - Dashboard com 4 abas: Dashboard, Arquivos, Buscar, Sobre
-- Instalação automática do Tor:
-  - Linux: `apt-get` / `dnf` / `pacman` / `zypper`
-  - macOS: `brew`
-  - Windows: download do Tor Expert Bundle
-- `src/config.rs` — configuração persistente (termos aceitos, caminho Tor)
-- CI/CD com GitHub Actions: builds Linux (.deb), Windows (.exe), macOS
-
-### 🔧 Alterado
-
-- `src/main.rs`: sem argumentos → TUI; com `share`/`join` → modo CLI
-
----
-
-## [0.1.0] — 2026-03-03
-
-### ✨ Inicial
-
-- Compartilhamento de arquivos via Tor Onion Service v3
-- Criptografia XChaCha20-Poly1305 + BLAKE3 por chunk
-- Servidor Axum multi-arquivo com sessões
-- Cliente reqwest via SOCKS5 Tor
-- Modo CLI: `onion_poc share --file ...` / `onion_poc join --link ...`
+- **Encrypted Chunks** — Divisão de arquivos em chunks de 256KB cifrados com XChaCha20-Poly1305.
+- **Onion Service Management** — Controle automático do processo Tor e criação de serviços ocultos efêmeros.
+- **Native GUI (egui)** — Interface moderna e responsiva implementada em Rust puro.
