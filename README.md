@@ -3,6 +3,7 @@
 > **TCC PoC** — Compartilhamento seguro de arquivos via Tor Onion Service, implementado 100% em Rust.
 
 [![CI/Release](https://github.com/DJmesh/onion_poc/actions/workflows/build.yml/badge.svg)](https://github.com/DJmesh/onion_poc/actions)
+[![Latest Release](https://img.shields.io/github/v/release/DJmesh/onion_poc?label=unstable&color=blue)](https://github.com/DJmesh/onion_poc/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
@@ -24,8 +25,8 @@
 
 ## 🚀 Download Automático (Builds Oficiais)
 
-Baixe as versões mais recentes compiladas para Windows, Linux e macOS diretamente na **página de Releases**:
-👉 **[Baixar onion-poc (GitHub Releases)](https://github.com/DJmesh/onion_poc/releases/latest)**
+Baixe a versão **v0.7.0 (Swarm & Hashing Update)** compilada para Windows, Linux e macOS:
+👉 **[Baixar onion-poc v0.7.0 (GitHub Releases)](https://github.com/DJmesh/onion_poc/releases/latest)**
 
 ---
 
@@ -136,7 +137,7 @@ Diferente da versão anterior que dependia de links únicos (como o OnionShare o
 
 ## 🏗️ Estrutura de Diretórios
 
-```
+```text
 src/
 ├── main.rs          — entrada: GUI (padrão) ou CLI (share/join)
 ├── lib.rs           — expõe módulos para testes externos
@@ -247,22 +248,6 @@ Veja [CHANGELOG.md](CHANGELOG.md) para histórico completo de versões.
 MIT — Eduardo Prestes, 2024.  
 Repositório: [github.com/DJmesh/onion_poc](https://github.com/DJmesh/onion_poc)
 
-## Swarm PoC update
+---
 
-This version adds a tracker-driven swarm proof of concept:
-
-* shared files now derive a deterministic BLAKE3 content hash
-* equal files across different peers are grouped by the same hash on the tracker
-* the tracker exposes a WebSocket lobby for live availability updates
-* search results are aggregated by content hash and display peer count
-* downloads triggered from the lobby use a swarm link and can fetch chunks from multiple peers sharing the same file
-
-### Default local tracker
-
-The default tracker URL is now:
-
-```txt
-http://127.0.0.1:8080
-```
-
-Run the tracker binary first for the PoC workflow.
+> **Nota para Teste (POC):** Para que o lobby global funcione, certifique-se de rodar o binário `tracker` primeiro. O endereço padrão de conexão dos clientes agora é `http://127.0.0.1:8080`.
