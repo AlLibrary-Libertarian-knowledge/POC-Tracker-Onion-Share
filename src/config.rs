@@ -23,7 +23,8 @@ impl Default for AppConfig {
             terms_accepted: false,
             tor_path: String::new(),
             node_id: uuid::Uuid::new_v4().to_string(),
-            tracker_url: "http://127.0.0.1:8080".to_string(),
+            tracker_url: "http://3phps2siiwstimug2mipw7tlizdvdmfydjf5clb7phujg4yfnkrh56qd.onion"
+                .to_string(),
             share_publicly: true,
         }
     }

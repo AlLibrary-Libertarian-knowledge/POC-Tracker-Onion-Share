@@ -250,4 +250,4 @@ Repositório: [github.com/DJmesh/onion_poc](https://github.com/DJmesh/onion_poc)
 
 ---
 
-> **Nota para Teste (POC):** Para que o lobby global funcione, certifique-se de rodar o binário `tracker` primeiro. O endereço padrão de conexão dos clientes agora é `http://127.0.0.1:8080`.
+> **Nota para Teste (POC):** O endereço padrão do servidor de rastreio (tracker) agora é: `http://3phps2siiwstimug2mipw7tlizdvdmfydjf5clb7phujg4yfnkrh56qd.onion`. (Certifique-se de que o tracker esteja ativo se for testar localmente em outra porta).
