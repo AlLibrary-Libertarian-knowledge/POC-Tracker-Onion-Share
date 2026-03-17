@@ -1,92 +1,189 @@
 use axum::{
-    extract::State,
-    routing::{get, post},
+    extract::{Path, State, WebSocketUpgrade},
+    response::IntoResponse,
+    routing::get,
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
+use axum::extract::ws::{Message, WebSocket};
+use futures_util::{SinkExt, StreamExt};
+use onion_poc::tracker_proto::{AnnouncedFile, NetworkFile, NetworkLobby, PeerLocation, WsClientMessage, WsServerMessage};
+use serde::Serialize;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::{broadcast, Mutex};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct PublicFile {
-    pub name: String,
-    pub size: u64,
-    pub link: String,
+#[derive(Clone, Debug)]
+struct Node {
+    last_seen: Instant,
+    onion: String,
+    files: Vec<AnnouncedFile>,
 }
 
 #[derive(Clone)]
-struct Node {
-    last_ping: Instant,
-    files: Vec<PublicFile>,
-}
-
-type SharedState = Arc<Mutex<HashMap<String, Node>>>;
-
-#[derive(Deserialize)]
-struct PingReq {
-    node_id: String,
-    files: Vec<PublicFile>,
+struct TrackerState {
+    nodes: Arc<Mutex<HashMap<String, Node>>>,
+    lobby_tx: broadcast::Sender<String>,
 }
 
 #[derive(Serialize)]
-struct LobbyRes {
-    online_nodes: usize,
-    files: Vec<PublicFile>,
+struct SwarmLookupResponse {
+    file: Option<NetworkFile>,
 }
 
-/// Registra que um node (cliente) está online e quais arquivos ele oferece publicamente.
-async fn ping(State(state): State<SharedState>, Json(req): Json<PingReq>) -> Json<()> {
-    let mut map = state.lock().unwrap();
-    map.insert(
-        req.node_id,
-        Node {
-            last_ping: Instant::now(),
-            files: req.files,
-        },
-    );
-    tracing::info!("Node atualizado. Total online: {}", map.len());
-    Json(())
-}
+fn aggregate_lobby(nodes: &HashMap<String, Node>) -> NetworkLobby {
+    let mut by_hash: HashMap<String, NetworkFile> = HashMap::new();
 
-/// Retorna a lista de todos os usuários ativos nos últimos 2 minutos e seus arquivos.
-async fn lobby(State(state): State<SharedState>) -> Json<LobbyRes> {
-    let mut map = state.lock().unwrap();
-    // Remove (evict) nodes que não enviaram ping nos últimos 2 minutos
-    map.retain(|_, n| n.last_ping.elapsed() < Duration::from_secs(120));
+    for (node_id, node) in nodes {
+        for file in &node.files {
+            let entry = by_hash.entry(file.content_hash.clone()).or_insert_with(|| NetworkFile {
+                name: file.name.clone(),
+                size: file.size,
+                link: file.link.clone(),
+                content_hash: file.content_hash.clone(),
+                peer_count: 0,
+                peers: Vec::new(),
+            });
 
-    let online_nodes = map.len();
-    let mut files = Vec::new();
-
-    // Agrega arquivos de todos os nós vivos anonimamente
-    for n in map.values() {
-        files.extend(n.files.clone());
+            entry.peers.push(PeerLocation {
+                node_id: node_id.clone(),
+                onion: node.onion.clone(),
+                file_id: file.file_id,
+                link: file.link.clone(),
+            });
+            entry.peer_count = entry.peers.len();
+        }
     }
 
-    Json(LobbyRes {
-        online_nodes,
-        files,
-    })
+    NetworkLobby {
+        online_nodes: nodes.len(),
+        files: by_hash.into_values().collect(),
+    }
+}
+
+async fn push_lobby(state: &TrackerState) {
+    let mut nodes = state.nodes.lock().await;
+    nodes.retain(|_, node| node.last_seen.elapsed() < Duration::from_secs(30));
+    let lobby = aggregate_lobby(&nodes);
+    if let Ok(payload) = serde_json::to_string(&WsServerMessage::Lobby { lobby }) {
+        let _ = state.lobby_tx.send(payload);
+    }
+}
+
+async fn lobby(State(state): State<TrackerState>) -> Json<NetworkLobby> {
+    let mut nodes = state.nodes.lock().await;
+    nodes.retain(|_, node| node.last_seen.elapsed() < Duration::from_secs(30));
+    Json(aggregate_lobby(&nodes))
+}
+
+async fn swarm_lookup(
+    State(state): State<TrackerState>,
+    Path(content_hash): Path<String>,
+) -> Json<SwarmLookupResponse> {
+    let mut nodes = state.nodes.lock().await;
+    nodes.retain(|_, node| node.last_seen.elapsed() < Duration::from_secs(30));
+    let lobby = aggregate_lobby(&nodes);
+    let file = lobby.files.into_iter().find(|f| f.content_hash == content_hash);
+    Json(SwarmLookupResponse { file })
+}
+
+async fn ws_handler(ws: WebSocketUpgrade, State(state): State<TrackerState>) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_socket(socket, state))
+}
+
+async fn handle_socket(socket: WebSocket, state: TrackerState) {
+    let (mut sender, mut receiver) = socket.split();
+    let mut rx = state.lobby_tx.subscribe();
+    let mut current_node_id: Option<String> = None;
+
+    if let Ok(initial) = serde_json::to_string(&WsServerMessage::Lobby {
+        lobby: {
+            let mut nodes = state.nodes.lock().await;
+            nodes.retain(|_, node| node.last_seen.elapsed() < Duration::from_secs(30));
+            aggregate_lobby(&nodes)
+        },
+    }) {
+        let _ = sender.send(Message::Text(initial.into())).await;
+    }
+
+    loop {
+        tokio::select! {
+            ws_msg = receiver.next() => {
+                match ws_msg {
+                    Some(Ok(Message::Text(text))) => {
+                        match serde_json::from_str::<WsClientMessage>(&text) {
+                            Ok(WsClientMessage::Announce { node_id, onion, files }) => {
+                                current_node_id = Some(node_id.clone());
+                                let mut nodes = state.nodes.lock().await;
+                                nodes.insert(node_id, Node {
+                                    last_seen: Instant::now(),
+                                    onion,
+                                    files,
+                                });
+                                drop(nodes);
+                                push_lobby(&state).await;
+                            }
+                            Err(err) => {
+                                tracing::warn!("invalid websocket payload: {err}");
+                            }
+                        }
+                    }
+                    Some(Ok(Message::Ping(bytes))) => {
+                        let _ = sender.send(Message::Pong(bytes)).await;
+                    }
+                    Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
+                    _ => {}
+                }
+            }
+            lobby_msg = rx.recv() => {
+                match lobby_msg {
+                    Ok(text) => {
+                        if sender.send(Message::Text(text.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        }
+    }
+
+    if let Some(node_id) = current_node_id {
+        let mut nodes = state.nodes.lock().await;
+        nodes.remove(&node_id);
+        drop(nodes);
+        push_lobby(&state).await;
+    }
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
-    let state: SharedState = Arc::new(Mutex::new(HashMap::new()));
+    let (lobby_tx, _) = broadcast::channel(64);
+    let state = TrackerState {
+        nodes: Arc::new(Mutex::new(HashMap::new())),
+        lobby_tx,
+    };
 
     let app = Router::new()
-        .route("/ping", post(ping))
+        .route("/ws", get(ws_handler))
         .route("/lobby", get(lobby))
-        .with_state(state);
+        .route("/swarm/:content_hash", get(swarm_lookup))
+        .with_state(state.clone());
 
-    // O tracker roda localmente na 8080.
-    // O tracker escuta em 0.0.0.0 na 8080 para aceitar conexões de outros containers Docker (Ex: o proxy Tor)
+    let cleanup_state = state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(5));
+        loop {
+            interval.tick().await;
+            push_lobby(&cleanup_state).await;
+        }
+    });
+
     let addr = "0.0.0.0:8080";
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    tracing::info!("✅ Tracker Server iniciado em http://{}", addr);
-
+    tracing::info!("tracker websocket/http ativo em http://{addr}");
     axum::serve(listener, app).await?;
-
     Ok(())
 }
