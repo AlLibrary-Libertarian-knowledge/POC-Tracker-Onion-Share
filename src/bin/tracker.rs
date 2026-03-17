@@ -8,6 +8,7 @@ use axum::extract::ws::{Message, WebSocket};
 use futures_util::{SinkExt, StreamExt};
 use onion_poc::tracker_proto::{AnnouncedFile, NetworkFile, NetworkLobby, PeerLocation, WsClientMessage, WsServerMessage};
 use serde::Serialize;
+use uuid::Uuid;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -97,7 +98,7 @@ struct DebugNodesResponse {
 struct DebugNode {
     node_id: String,
     onion: String,
-    files_count: usize,
+    files: Vec<Uuid>,
 }
 
 async fn debug_nodes(State(state): State<TrackerState>) -> Json<DebugNodesResponse> {
@@ -105,7 +106,7 @@ async fn debug_nodes(State(state): State<TrackerState>) -> Json<DebugNodesRespon
     let list = nodes.iter().map(|(id, n)| DebugNode {
         node_id: id.clone(),
         onion: n.onion.clone(),
-        files_count: n.files.len(),
+        files: n.files.iter().map(|f| f.file_id).collect(),
     }).collect();
 
     Json(DebugNodesResponse {

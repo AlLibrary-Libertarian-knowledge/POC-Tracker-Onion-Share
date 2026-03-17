@@ -229,7 +229,8 @@ cargo deb
 Veja [CHANGELOG.md](CHANGELOG.md) para histórico completo de versões.
 
 | Versão | Data | Destaque |
-| --- | --- | --- | --- |
+| --- | --- | --- |
+| **0.7.4** | 2026-03-17 | **WebSocket @ Tor (SOCKS5)** — Suporte a Trackers Onion e Lobby Global Anônimo |
 | **0.7.3** | 2026-03-17 | **Fix Build & Production Tracker** — Correção de imports, debug nodes e URL Onion oficial |
 | **0.7.0** | 2026-03-17 | **Tracker WebSocket & Swarm Download** — lobby bi-direcional e download multi-peer por hash |
 | **0.6.1** | 2026-03-03 | Busca em tempo real e Correção da Bridge Docker no Tracker |

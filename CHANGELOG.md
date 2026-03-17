@@ -5,6 +5,18 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) | Versionin
 
 ---
 
+## [0.7.4] — 2026-03-17
+
+### ✨ Adicionado
+
+- **WebSocket over Tor (SOCKS5)** — O aplicativo agora consegue se conectar a trackers que possuem endereço `.onion`, permitindo um lobby global 100% anônimo.
+- **Improved Monitoring** — O comando de debug do tracker agora mostra os IDs dos arquivos (`file_id`) para facilitar o diagnóstico de conectividade.
+
+### 🔧 Corrigido
+
+- **Contagem Offline/Online Permanente** — Corrigido bug onde máquinas usando trackers `.onion` ficavam em modo "leitura" (fetch) e nunca se anunciavam (announce) no lobby.
+- **Erro 404 no Download** — Sincronização agressiva de anúncios para evitar IDs de arquivos expirados no lobby.
+
 ## [0.7.3] — 2026-03-17
 
 ### ✨ Adicionado

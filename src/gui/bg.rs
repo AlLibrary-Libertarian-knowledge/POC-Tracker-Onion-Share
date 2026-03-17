@@ -11,8 +11,10 @@ use crate::wizard::installer;
 
 use super::shared::{GuiControl, SharedFileInfo, SharedStateRef, TorInitState};
 use crate::tracker_proto::{AnnouncedFile, NetworkFile, NetworkLobby, WsClientMessage, WsServerMessage};
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt, future::Either};
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::client_async_with_config;
+use std::net::SocketAddr;
 
 pub fn run_blocking(shared: SharedStateRef, tor_path: String) {
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -518,76 +520,96 @@ async fn tracker_ws_loop(shared: SharedStateRef) {
             continue;
         }
 
-        if tracker_url.contains(".onion") {
-            let _ = sync_tracker(shared.clone()).await;
-            tokio::time::sleep(Duration::from_secs(5)).await;
-            continue;
-        }
+        let socks_addr_str = _socks_addr.clone();
+        let tracker_url_clone = tracker_url.clone();
+        let ws_url = tracker_ws_url(tracker_url_clone.trim_end_matches('/'));
 
-        let ws_url = tracker_ws_url(tracker_url.trim_end_matches('/'));
-        match tokio_tungstenite::connect_async(&ws_url).await {
-            Ok((mut ws_stream, _)) => {
-                let mut interval = tokio::time::interval(Duration::from_secs(5));
-                loop {
-                    tokio::select! {
-                        _ = interval.tick() => {
-                            let payload = {
-                                let s = shared.lock().unwrap();
-                                let cfg = AppConfig::load();
-                                if !s.tor_active {
-                                    None
-                                } else {
-                                    let files = if cfg.share_publicly {
-                                        s.shared_files.iter().map(|f| AnnouncedFile {
-                                            file_id: f.file_id,
-                                            name: f.name.clone(),
-                                            size: f.size,
-                                            link: f.link.clone(),
-                                            content_hash: f.content_hash.clone(),
-                                        }).collect()
-                                    } else {
-                                        Vec::new()
-                                    };
-                                    s.onion_addr.clone().map(|onion| WsClientMessage::Announce {
-                                        node_id: cfg.node_id,
-                                        onion,
-                                        files,
-                                    })
-                                }
-                            };
-                            if let Some(msg) = payload {
-                                let text = match serde_json::to_string(&msg) {
-                                    Ok(text) => text,
-                                    Err(_) => continue,
-                                };
-                                if ws_stream.send(Message::Text(text.into())).await.is_err() {
-                                    break;
-                                }
-                            }
-                        }
-                        incoming = ws_stream.next() => {
-                            match incoming {
-                                Some(Ok(Message::Text(text))) => {
-                                    if let Ok(WsServerMessage::Lobby { lobby }) = serde_json::from_str::<WsServerMessage>(&text) {
-                                        shared.lock().unwrap().global_lobby = lobby;
-                                    }
-                                }
-                                Some(Ok(Message::Ping(bytes))) => {
-                                    let _ = ws_stream.send(Message::Pong(bytes)).await;
-                                }
-                                Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
-                                _ => {}
-                            }
-                        }
-                    }
+        let ws_conn: anyhow::Result<Either<_, _>> = async {
+            if tracker_url_clone.contains(".onion") {
+                if let Some(ref socks) = socks_addr_str {
+                    let socks_socket: SocketAddr = socks.parse()?;
+                    let url = url::Url::parse(&ws_url)?;
+                    let host = url.host_str().context("no host")?;
+                    let port = url.port().unwrap_or(80);
+                    let stream = tokio_socks::tcp::Socks5Stream::connect(socks_socket, (host, port)).await?;
+                    let (ws, _resp) = client_async_with_config(ws_url.clone(), stream, None).await?;
+                    Ok(Either::Left(ws))
+                } else {
+                    anyhow::bail!("Tor desativado para tracker onion")
                 }
+            } else {
+                let (ws, _resp) = tokio_tungstenite::connect_async(ws_url.clone()).await?;
+                Ok(Either::Right(ws))
             }
-            Err(_) => {
+        }.await;
+
+        match ws_conn {
+            Ok(ws_stream) => {
+                tracing::info!("Conectado ao Tracker WebSocket: {}", ws_url);
+                let _ = ws_comm_loop(ws_stream, shared.clone()).await;
+            }
+            Err(e) => {
+                tracing::warn!("Erro ao conectar no Tracker WebSocket ({}): {}", ws_url, e);
                 let _ = sync_tracker(shared.clone()).await;
                 tokio::time::sleep(Duration::from_secs(3)).await;
             }
         }
     }
+}
+
+async fn ws_comm_loop<S>(mut ws_stream: S, shared: SharedStateRef) -> anyhow::Result<()>
+where S: SinkExt<Message, Error = tokio_tungstenite::tungstenite::Error> + StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>> + Unpin
+{
+    let mut interval = tokio::time::interval(Duration::from_secs(5));
+    loop {
+        tokio::select! {
+            _ = interval.tick() => {
+                let payload = {
+                    let s = shared.lock().unwrap();
+                    let cfg = AppConfig::load();
+                    if !s.tor_active {
+                        None
+                    } else {
+                        let files = if cfg.share_publicly {
+                            s.shared_files.iter().map(|f| AnnouncedFile {
+                                file_id: f.file_id,
+                                name: f.name.clone(),
+                                size: f.size,
+                                link: f.link.clone(),
+                                content_hash: f.content_hash.clone(),
+                            }).collect()
+                        } else {
+                            Vec::new()
+                        };
+                        s.onion_addr.clone().map(|onion| WsClientMessage::Announce {
+                            node_id: cfg.node_id,
+                            onion,
+                            files,
+                        })
+                    }
+                };
+                if let Some(msg) = payload {
+                    let text = serde_json::to_string(&msg)?;
+                    ws_stream.send(Message::Text(text.into())).await?;
+                }
+            }
+            incoming = ws_stream.next() => {
+                match incoming {
+                    Some(Ok(Message::Text(text))) => {
+                        if let Ok(WsServerMessage::Lobby { lobby }) = serde_json::from_str::<WsServerMessage>(&text) {
+                            shared.lock().unwrap().global_lobby = lobby;
+                        }
+                    }
+                    Some(Ok(Message::Ping(bytes))) => {
+                        let _ = ws_stream.send(Message::Pong(bytes)).await;
+                    }
+                    Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
+                    _ => {}
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 async fn sync_tracker(tracker_shared: SharedStateRef) {

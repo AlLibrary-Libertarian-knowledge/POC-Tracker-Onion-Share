@@ -64,6 +64,19 @@ Mesmo a pessoa que baixe o `.exe` no Japão usará os túneis invisíveis do Tor
 
 ---
 
+## 🌐 WebSocket sobre Tor (v0.7.4+)
+
+Nas versões anteriores, o lobby global funcionava via "Polling HTTP" (o app perguntava pro servidor a cada X segundos). Isso era lento e causava o erro **404 Not Found** porque o servidor demorava a atualizar os IDs dos arquivos quando uma máquina caía e voltava.
+
+A partir da **v0.7.4**, o sistema usa **WebSockets sobre SOCKS5 (Tor)**:
+
+- **Conexão Permanente:** O app mantém um "túnel" aberto com o Tracker.
+- **Batimento Cardíaco (Heartbeat):** O servidor sabe instantaneamente se você está online.
+- **Anúncios em Tempo Real:** Se você adiciona um arquivo, ele aparece no lobby de todo mundo em menos de 5 segundos.
+- **IDs Sempre Frescos:** Como a conexão é persistente, o Tracker sempre tem o `file_id` mais recente da sua sessão, eliminando o erro 404.
+
+---
+
 ## 🔍 Monitoramento e Troubleshooting
 
 ### Ver quantos PCs estão conectados (Lobby Real)
