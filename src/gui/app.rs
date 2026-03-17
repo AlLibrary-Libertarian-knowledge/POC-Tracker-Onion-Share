@@ -561,7 +561,7 @@ impl GuiApp {
 
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.add_space(4.0);
-                    ui.label(RichText::new("v0.3.1 • MIT License").size(9.0).color(C_DIM));
+                    ui.label(RichText::new("v0.7.0 • MIT License").size(9.0).color(C_DIM));
                 });
             });
     }
@@ -1112,8 +1112,9 @@ impl GuiApp {
                                 ui.label(RichText::new(&f.name).color(C_TEXT).size(13.5).strong());
                                 ui.label(
                                     RichText::new(format!(
-                                        "Tamanho: {}",
-                                        crate::gui::shared::SharedState::fmt_bytes(f.size)
+                                        "Tamanho: {} • Peers: {}",
+                                        crate::gui::shared::SharedState::fmt_bytes(f.size),
+                                        f.peer_count
                                     ))
                                     .color(C_TEXT2)
                                     .size(11.0),
@@ -1128,8 +1129,12 @@ impl GuiApp {
                                         .stroke(Stroke::new(1.0, C_BORDER));
                                     if ui.add(btn).clicked() {
                                         self.view = View::Download;
-                                        self.download_link_input = f.link.clone();
-                                        self.set_status("Link copiado para Download!", C_GREEN);
+                                        let tracker_url = crate::config::AppConfig::load().tracker_url;
+                                        self.download_link_input = crate::link::SwarmLink {
+                                            tracker_url,
+                                            content_hash: f.content_hash.clone(),
+                                        }.to_string();
+                                        self.set_status("Swarm link preparado para Download!", C_GREEN);
                                     }
                                 },
                             );
@@ -1145,7 +1150,7 @@ impl GuiApp {
     fn draw_about(&self, ui: &mut egui::Ui) {
         card(ui, "ℹ️ Sobre o onion-poc", |ui| {
             ui.label(
-                RichText::new("🧅 onion-poc v0.3.1")
+                RichText::new("🧅 onion-poc v0.7.0")
                     .size(19.0)
                     .color(C_ACCENT)
                     .strong(),
