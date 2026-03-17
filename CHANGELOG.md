@@ -5,6 +5,28 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) | Versionin
 
 ---
 
+## [0.7.0] — 2026-03-17
+
+### ✨ Adicionado
+
+- **Tracker com WebSocket** — Migração do pooling HTTP para WebSocket bi-direcional em `/ws`. Presença em tempo real e atualizações instantâneas do lobby global.
+- **Protocolo de Swarm (Multipeer)** — Novo formato de link `opocswarm://` que permite baixar arquivos de múltiplos peers simultâneos.
+- **Agrupamento por Hash BLAKE3** — O lobby agora agrupa arquivos identicamente baseados no conteúdo (hash BLAKE3 de 256 bits).
+- **Deduplicação Automática** — Mesma mídia em máquinas diferentes aponta para o mesmo hash no servidor, otimizando a disponibilidade.
+- **Download em Enxame (Swarm)** — Download distribuído iniciado pela busca, baixando chunks de diferentes peers em paralelo.
+- **Chaves Determinísticas** — A chave de criptografia XChaCha20 agora é derivada do hash do conteúdo, garantindo que peers com o mesmo arquivo usem a mesma chave.
+
+### 🔧 Alterado
+
+- **Presença Reversa** — O tracker agora considera nós offline automaticamente se a conexão WebSocket cair ou se não houver resposta em 30 segundos.
+- **Tracker URL Padrão** — Ajustado para `http://127.0.0.1:8080` para facilitar a Prova de Conceito (POC) local.
+- **Busca por Hash** — Busca na rede agora agrega peers por hash e mostra a contagem total de fontes disponíveis.
+
+### 🎨 GUI
+
+- Aba **🔍 Buscar** atualizada para mostrar contagem de peers e botão de baixar via Swarm.
+- Refatoração interna do background manager (`bg.rs`) para gerenciar downloads multipeer.
+
 ## [0.3.1] — 2026-03-03
 
 ### 🐛 Corrigido
