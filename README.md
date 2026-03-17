@@ -25,8 +25,8 @@
 
 ## 🚀 Download Automático (Builds Oficiais)
 
-Baixe a versão **v0.7.0 (Swarm & Hashing Update)** compilada para Windows, Linux e macOS:
-👉 **[Baixar onion-poc v0.7.0 (GitHub Releases)](https://github.com/DJmesh/onion_poc/releases/latest)**
+Baixe a versão **v0.7.5 (UX & Real-time Update)** compilada para Windows, Linux e macOS:
+👉 **[Baixar onion-poc v0.7.5 (GitHub Releases)](https://github.com/DJmesh/onion_poc/releases/latest)**
 
 ---
 
@@ -101,17 +101,17 @@ Existe um loop silencioso (no `src/gui/bg.rs`) rodando a cada 5 segundos:
 * **Fetch (Lendo o Radar):** Imediatamente, ele solicita: *"Me manda a lista de quem mais tá online"*. O Tracker responde com a lista global em posse de todas as máquinas conectadas.
 * **Injeção ao Vivo:** A tela Egui é atualizada na "Limbo/Search" piscando em tempo real.
 
-#### 📥 Download e Transferência Exclusiva Ponto-a-Ponto
+#### 🔄 Sincronização e Download (WebSockets + Swarm)
 
-Aqui está o grande diferencial: **o Tracker jamais trafega arquivos!** Ele apenas aponta o mapa. Quando você clica em "Baixar", O Tracker "sai da jogada".
+A partir da versão **0.7.5**, o processo de download foi otimizado para ser 100% resiliente:
 
-1. O seu cliente Tor se conecta diretamente ao cliente Tor local de quem tem o arquivo (P2P real via `.onion`), solicitando de forma assíncrona o arquivo despedaçado em "Chunks".
-2. O tráfego é blindado primeiramente pela rede Tor e, como camada extrema de segurança, **cada pedaço (Chunk)** é criptografado nativamente com seu algoritmo **XChaCha20-Poly1305** militar. Ninguém (nem o Provedor de Internet nem os Nós da rede Tor) sabe que arquivo está sendo passado!
-3. No seu computador, os pedaços chegam, são submetidos a uma dupla decriptagem e **remontados perfeitamente em memória.**
-
-### 🎭 Resumo da Ópera
-
-O Tracker funciona como o painel de **Classificados** de um jornal anônimo – ele anuncia quem tem o quê. Mas o verdadeiro leilão e as entregas ocorrem de forma rigorosa, secreta e **criptografada Ponto-a-Ponto de Máquina A para Máquina B**, furando firewalls naturalmente sem necessidade de liberar portas de modem ou ter IP fixo.
+1. **Conexão Perene:** Ao abrir o app, ele estabelece um túnel **WebSocket via SOCKS5/Tor** com o Tracker. Isso significa que o servidor sabe instantaneamente quem entra e quem sai, mantendo o Lobby limpo.
+2. **Busca Baseada em Conteúdo:** Quando você busca um arquivo, o app recebe uma lista de **todos os endereços Onion** que possuem aquele mesmo Hash.
+3. **Download em Enxame (Swarm):** Ao clicar em baixar, o app inicia um "enxame":
+    * Ele divide o arquivo em pedaços de 256 KB.
+    * Ele solicita o Pedaço 1 do PC A, o Pedaço 2 do PC B, o Pedaço 3 do PC C... simultaneamente.
+    * Se o PC B cair, o app detecta e pede o Pedaço 2 para o PC A ou C automaticamente.
+4. **Dashboard de Alta Precisão:** A nova interface calcula a média de velocidade dos últimos pedaços e projeta o **ETA (Tempo Estimado)**, proporcionando uma experiência digna de gerenciadores de download profissionais.
 
 Toda essa orquestra militar dentro de **um binário veloz de interface limpa!** 🚀
 
@@ -228,8 +228,7 @@ cargo deb
 
 Veja [CHANGELOG.md](CHANGELOG.md) para histórico completo de versões.
 
-| Versão | Data | Destaque |
-| --- | --- | --- |
+| **0.7.5** | 2026-03-17 | **UX & Real-time Dashboard** — Velocidade (Mbps/KB/s), ETA e Redesign do Lobby |
 | **0.7.4** | 2026-03-17 | **WebSocket @ Tor (SOCKS5)** — Suporte a Trackers Onion e Lobby Global Anônimo |
 | **0.7.3** | 2026-03-17 | **Fix Build & Production Tracker** — Correção de imports, debug nodes e URL Onion oficial |
 | **0.7.0** | 2026-03-17 | **Tracker WebSocket & Swarm Download** — lobby bi-direcional e download multi-peer por hash |

@@ -5,6 +5,18 @@ Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) | Versionin
 
 ---
 
+## [0.7.5] — 2026-03-17
+
+### 🎨 GUI & UX
+
+- **Dashboard de Download Real-time** — Adicionado cálculo de velocidade em tempo real e Estimativa de Tempo (ETA) para downloads.
+- **Botão "Baixar Agora" Profissional** — Redesign completo do botão de ação no Lobby: cor verde vibrante, texto branco em negrito e feedback visual aprimorado.
+- **Micro-interações** — Adicionado `on_hover` nos botões de download e melhoria no contraste dos progressos.
+
+### 🔧 Corrigido
+
+- **Gagueira no Progresso** — Otimização no envio de atualizações de progresso para a GUI, tornando o avanço da barra de download mais fluido.
+
 ## [0.7.4] — 2026-03-17
 
 ### ✨ Adicionado
