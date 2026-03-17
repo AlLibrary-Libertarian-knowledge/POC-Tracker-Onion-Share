@@ -11,7 +11,6 @@ use tokio::net::TcpListener;
 use tokio::sync::{oneshot, watch};
 use tracing::{info, warn};
 
-use crate::crypto::FileKey;
 use crate::link::ShareLink;
 use crate::share::Share;
 use crate::tor::{TorControl, TorProcess};
@@ -81,9 +80,8 @@ impl ShareServerHandle {
         &self,
         file_path: PathBuf,
         chunk_size: usize,
-        key: FileKey,
     ) -> anyhow::Result<Share> {
-        let share = Share::new(file_path, chunk_size, key)?;
+        let share = Share::new(file_path, chunk_size)?;
         self.state.add_share(share.clone()).await;
         Ok(share)
     }

@@ -2,8 +2,9 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::tracker_proto::{NetworkFile, NetworkLobby};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Comandos da GUI → background
@@ -45,6 +46,7 @@ pub struct SharedFileInfo {
     pub name: String,
     pub size: u64,
     pub link: String,
+    pub content_hash: String,
     pub downloads: u64,
     pub _added_at: Instant,
 }
@@ -69,19 +71,8 @@ impl Default for TorInitState {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Rede (Tracker)
+// Tipos compartilhados em crate::tracker_proto
 // ─────────────────────────────────────────────────────────────────────────────
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NetworkFile {
-    pub name: String,
-    pub size: u64,
-    pub link: String,
-}
-
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
-pub struct NetworkLobby {
-    pub online_nodes: usize,
-    pub files: Vec<NetworkFile>,
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Estado compartilhado (GUI lê + background escreve)

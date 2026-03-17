@@ -227,3 +227,24 @@ Veja [CHANGELOG.md](CHANGELOG.md) para histórico completo de versões.
 
 MIT — Eduardo Prestes, 2024.  
 Repositório: [github.com/DJmesh/onion_poc](https://github.com/DJmesh/onion_poc)
+
+
+## Swarm PoC update
+
+This version adds a tracker-driven swarm proof of concept:
+
+- shared files now derive a deterministic BLAKE3 content hash
+- equal files across different peers are grouped by the same hash on the tracker
+- the tracker exposes a WebSocket lobby for live availability updates
+- search results are aggregated by content hash and display peer count
+- downloads triggered from the lobby use a swarm link and can fetch chunks from multiple peers sharing the same file
+
+### Default local tracker
+
+The default tracker URL is now:
+
+```txt
+http://127.0.0.1:8080
+```
+
+Run the tracker binary first for the PoC workflow.
