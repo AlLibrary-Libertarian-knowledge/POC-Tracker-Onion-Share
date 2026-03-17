@@ -42,7 +42,7 @@ sudo dpkg -i onion-poc_linux_amd64.deb
 
 ### Windows
 
-```
+```text
 Baixe e execute o instalador onion_poc_setup_windows.exe.
 O wizard (Inno Setup) cuidará de instalar o app em seu computador,
 extrair o Tor pré-embutido e criar o atalho na área de trabalho!
@@ -160,7 +160,7 @@ tests/
 
 ### Fluxo de dados
 
-```
+```text
         GUI Thread (eframe)                 Background Thread (tokio)
         ──────────────────                  ─────────────────────────
 update() → lock(SharedState) →  read ──→  poll control_queue()
@@ -229,7 +229,8 @@ cargo deb
 Veja [CHANGELOG.md](CHANGELOG.md) para histórico completo de versões.
 
 | Versão | Data | Destaque |
-|---|---|---|
+| --- | --- | --- | --- |
+| **0.7.3** | 2026-03-17 | **Fix Build & Production Tracker** — Correção de imports, debug nodes e URL Onion oficial |
 | **0.7.0** | 2026-03-17 | **Tracker WebSocket & Swarm Download** — lobby bi-direcional e download multi-peer por hash |
 | **0.6.1** | 2026-03-03 | Busca em tempo real e Correção da Bridge Docker no Tracker |
 | **0.6.0** | 2026-03-03 | Rede Decentralizada: Servidor Rastreador (Tracker) e aba de Lobby/Busca global implementada |
