@@ -1001,13 +1001,23 @@ impl GuiApp {
                                             dl.speed_bytes_per_sec
                                         )
                                     );
+                                    let eta_str = dl
+                                        .eta_seconds
+                                        .map(|s| {
+                                            format!(
+                                                " • ETA: {}",
+                                                crate::gui::shared::SharedState::fmt_duration(s)
+                                            )
+                                        })
+                                        .unwrap_or_default();
 
                                     ui.horizontal(|ui| {
                                         ui.label(
                                             RichText::new(format!(
-                                                "{:.1}% — {}",
+                                                "{:.1}% — {}{}",
                                                 dl.progress * 100.0,
-                                                dl.status
+                                                dl.status,
+                                                eta_str
                                             ))
                                             .color(C_CYAN)
                                             .size(10.5),
@@ -1122,10 +1132,21 @@ impl GuiApp {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
-                                    let btn = egui::Button::new(RichText::new("Baixar").size(11.0))
-                                        .fill(C_PANEL2)
-                                        .stroke(Stroke::new(1.0, C_BORDER));
-                                    if ui.add(btn).clicked() {
+                                    let btn = egui::Button::new(
+                                        RichText::new("📥 Baixar Agora")
+                                            .color(Color32::WHITE)
+                                            .size(11.5)
+                                            .strong(),
+                                    )
+                                    .fill(C_GREEN)
+                                    .rounding(4.0)
+                                    .min_size(Vec2::new(100.0, 28.0));
+
+                                    if ui
+                                        .add(btn)
+                                        .on_hover_text("Clique para iniciar o download via Swarm")
+                                        .clicked()
+                                    {
                                         self.view = View::Download;
                                         let tracker_url =
                                             crate::config::AppConfig::load().tracker_url;
