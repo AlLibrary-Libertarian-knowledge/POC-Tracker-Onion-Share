@@ -1,37 +1,30 @@
-# Trackerless LAN Swarm Notes
+# Decentralized P2P Network Notes (v0.8.0)
 
-This adaptation removes the runtime dependency on the HTTP/WebSocket tracker for peer discovery.
+Esta versão remove a dependência de um servidor central fixo para descoberta de arquivos, implementando uma rede puramente P2P.
 
-## What changed
+## O que mudou
 
-- Peer discovery is now done with UDP multicast on the local network.
-- Every node periodically announces:
-  - `node_id`
-  - `onion`
-  - public shared files
-  - `content_hash`
-- The GUI lobby is rebuilt locally from the peer announcements.
-- Swarm downloads now resolve peers from the local discovery cache instead of `/swarm/:content_hash` on a tracker.
-- File integrity is checked with:
-  - full-file BLAKE3 hash
-  - per-chunk BLAKE3 hash list in the manifest
+- **Descoberta Híbrida:**
+  - **LAN:** Discovery via UDP Multicast (anúncios a cada 4 segundos).
+  - **WAN:** Protocolo **Gossip over Tor**. Sincronização periódica (45s) com Bootstrap Nodes e peers descobertos.
+- **Protocolo Gossip:**
+  - Cada nó expõe `/network/gossip` via Hidden Service.
+  - Troca de listas de arquivos e lista de endereços Onion conhecidos.
+  - Reconstrução dinâmica do lobby global no cliente.
+- **Swarm Downloads:**
+  - Agora os peers são resolvidos a partir do cache de descoberta local (que agrega LAN + WAN).
+  - Suporte a download paralelo de múltiplos peers descobertos via Gossip.
+- **Bootstrap Nodes:**
+  - Suporte a "Entry Points" configuráveis para entrada na rede global.
 
-## Scope
+## Configuração (AppConfig)
 
-This is a **trackerless LAN discovery** approach.
-It removes the central tracker requirement for machines that can see the same multicast domain.
+- `bootstrap_peers`: Lista de endereços Onion confiáveis.
+- `discovery_multicast_addr`: Default `239.255.77.77`.
+- `discovery_port`: Default `41075`.
 
-It does **not** implement a full Internet-wide DHT/bootstrap network.
-For WAN-scale decentralization, the next step would be a libp2p/DHT layer.
+## Segurança e Anonimato
 
-## Config
-
-New config fields:
-
-- `discovery_multicast_addr`
-- `discovery_port`
-
-Defaults:
-
-- `239.255.77.77`
-- `41075`
+- Toda a comunicação WAN é feita exclusivamente através do túnel SOCKS5 do Tor.
+- A integridade dos arquivos é garantida por hashes BLAKE3 (chunk e full-file).
+- A topologia da rede é oculta; um observador externo não consegue mapear quem está baixando de quem sem quebrar a criptografia do Tor.

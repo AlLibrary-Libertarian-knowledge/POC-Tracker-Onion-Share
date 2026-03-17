@@ -100,6 +100,7 @@ impl TorProcess {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn wait(&mut self) -> anyhow::Result<std::process::ExitStatus> {
         let status = self.child.wait().await.context("wait tor failed")?;
         Ok(status)

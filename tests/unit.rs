@@ -117,6 +117,9 @@ mod config_tests {
             node_id: "test-node".into(),
             tracker_url: "http://test-tracker".into(),
             share_publicly: false,
+            discovery_multicast_addr: "239.255.77.77".to_string(),
+            discovery_port: 41075,
+            bootstrap_peers: vec![],
         };
         assert_eq!(cfg.tor_bin(), "/usr/local/bin/tor");
         assert_eq!(cfg.effective_tor_path(), "/usr/local/bin/tor");
@@ -132,6 +135,9 @@ mod config_tests {
             node_id: "test-node".into(),
             tracker_url: "http://test-tracker".into(),
             share_publicly: false,
+            discovery_multicast_addr: "239.255.77.77".to_string(),
+            discovery_port: 41075,
+            bootstrap_peers: vec![],
         };
         // Verifica serialize/deserialize JSON
         let json = serde_json::to_string_pretty(&cfg).unwrap();

@@ -34,9 +34,7 @@ impl Default for AppConfig {
             share_publicly: true,
             discovery_multicast_addr: "239.255.77.77".to_string(),
             discovery_port: 41075,
-            bootstrap_peers: vec![
-                "http://zxcy4abcedfg...xyz.onion".to_string(), // Exemplo de bootstrap
-            ],
+            bootstrap_peers: vec!["http://zxcy4abcedfg...xyz.onion".to_string()],
         }
     }
 }
@@ -87,6 +85,7 @@ impl AppConfig {
         self.tor_bin().to_string()
     }
 
+    #[allow(dead_code)]
     pub fn discovery_multicast_socket(&self) -> String {
         format!("{}:{}", self.discovery_multicast_addr, self.discovery_port)
     }

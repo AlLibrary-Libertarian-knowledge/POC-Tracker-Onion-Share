@@ -101,6 +101,7 @@ pub struct SharedState {
     pub global_lobby: NetworkLobby,
 
     // Nós conhecidos (Onion Addresses) para o Gossip
+    #[allow(dead_code)]
     pub known_peers: Vec<String>,
 
     // Fila de comandos (GUI escreve, background consome)

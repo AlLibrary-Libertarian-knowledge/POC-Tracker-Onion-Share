@@ -36,6 +36,7 @@ pub struct NetworkLobby {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[allow(dead_code)]
 pub enum WsClientMessage {
     Announce {
         node_id: String,
@@ -46,6 +47,7 @@ pub enum WsClientMessage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[allow(dead_code)]
 pub enum WsServerMessage {
     Lobby { lobby: NetworkLobby },
 }

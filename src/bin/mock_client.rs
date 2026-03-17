@@ -1,6 +1,6 @@
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::protocol::Message;
-use futures_util::{SinkExt, StreamExt};
+use futures_util::SinkExt;
 use serde_json;
 use uuid::Uuid;
 use onion_poc::tracker_proto::{WsClientMessage, AnnouncedFile};

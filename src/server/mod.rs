@@ -23,6 +23,7 @@ use state::AppState;
 pub struct ShareServerHandle {
     pub state: AppState,
     pub onion_addr: String,   // "<id>.onion"
+    #[allow(dead_code)]
     pub local_port: u16,
     stop_tx: oneshot::Sender<()>,
     server_task: tokio::task::JoinHandle<anyhow::Result<()>>,

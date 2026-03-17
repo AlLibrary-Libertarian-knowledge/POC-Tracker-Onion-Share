@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 pub type FileKey = [u8; 32];
 
+#[allow(dead_code)]
 pub fn random_key() -> FileKey {
     let mut k = [0u8; 32];
     rand::rngs::OsRng.fill_bytes(&mut k);
@@ -45,28 +46,49 @@ fn aad(file_id: Uuid, chunk_index: u64) -> [u8; 24] {
     out
 }
 
-pub fn encrypt_chunk(key: &FileKey, file_id: Uuid, chunk_index: u64, plaintext: &[u8]) -> anyhow::Result<Vec<u8>> {
+pub fn encrypt_chunk(
+    key: &FileKey,
+    file_id: Uuid,
+    chunk_index: u64,
+    plaintext: &[u8],
+) -> anyhow::Result<Vec<u8>> {
     let cipher = XChaCha20Poly1305::new_from_slice(key).expect("32 bytes");
     let nonce = nonce_for_chunk(key, chunk_index);
     let aad = aad(file_id, chunk_index);
 
     let ct = cipher
-        .encrypt(&nonce, Payload { msg: plaintext, aad: &aad })
+        .encrypt(
+            &nonce,
+            Payload {
+                msg: plaintext,
+                aad: &aad,
+            },
+        )
         .map_err(|_| anyhow::anyhow!("encrypt failed"))?;
     Ok(ct)
 }
 
-pub fn decrypt_chunk(key: &FileKey, file_id: Uuid, chunk_index: u64, ciphertext: &[u8]) -> anyhow::Result<Vec<u8>> {
+pub fn decrypt_chunk(
+    key: &FileKey,
+    file_id: Uuid,
+    chunk_index: u64,
+    ciphertext: &[u8],
+) -> anyhow::Result<Vec<u8>> {
     let cipher = XChaCha20Poly1305::new_from_slice(key).expect("32 bytes");
     let nonce = nonce_for_chunk(key, chunk_index);
     let aad = aad(file_id, chunk_index);
 
     let pt = cipher
-        .decrypt(&nonce, Payload { msg: ciphertext, aad: &aad })
+        .decrypt(
+            &nonce,
+            Payload {
+                msg: ciphertext,
+                aad: &aad,
+            },
+        )
         .map_err(|_| anyhow::anyhow!("decrypt failed (wrong key or corrupted data)"))?;
     Ok(pt)
 }
-
 
 pub fn content_hash_hex(bytes: &[u8]) -> String {
     blake3::hash(bytes).to_hex().to_string()
