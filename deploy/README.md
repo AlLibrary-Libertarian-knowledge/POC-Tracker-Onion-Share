@@ -4,7 +4,7 @@ Bem-vindo ao manual do Tracker! Esta é a peça central da rede do seu TCC. Ele 
 
 ---
 
-### Pergunta: "Se eu deixar ele rodando no meu PC hoje (como `127.0.0.1:8080`), quem baixar o meu `.exe` pelo mundo consegue usar a rede?"
+## ❓ Pergunta: "Se eu deixar ele rodando no meu PC hoje (como `127.0.0.1:8080`), quem baixar o meu `.exe` pelo mundo consegue usar a rede?"
 
 **Resposta:** ❌ Não!
 Se o seu código-fonte está configurado com `127.0.0.1`, quando um usário no Japão abrir o aplicativo, o aplicativo tentará se conectar à rede local do computador *dele* (no Japão), e não ao *seu* Tracker no Brasil. Ele dirá "Nenhum usuário online".
@@ -64,6 +64,33 @@ Mesmo a pessoa que baixe o `.exe` no Japão usará os túneis invisíveis do Tor
 
 ---
 
+## 🔍 Monitoramento e Troubleshooting
+
+### Ver quantos PCs estão conectados (Lobby Real)
+
+Você pode ver a lista bruta de IDs de máquinas conectadas no seu servidor através deste comando no terminal do seu servidor:
+
+```bash
+docker compose exec tracker curl -s http://localhost:8080/debug/nodes
+```
+
+### ⚠️ Problema: "Tenho várias máquinas mas só aparece 1 Online"
+
+Se você abrir o app em dois PCs e marcar apenas "1 online", o motivo mais provável é **Colisão de ID de Nó**.
+
+**Por que acontece?**
+Cada aplicativo gera um `node_id` único no seu arquivo de configuração na primeira vez que abre. Se você baixou o app e **copiou a pasta inteira** (incluindo a pasta de dados do usuário) de um computador para o outro, ambos terão o *mesmo ID*. O servidor vê isso como se fosse o mesmo PC trocando de link e "sobrescreve" a conexão.
+
+**Como resolver:**
+
+1. No computador onde o ID está repetido, feche o aplicativo.
+2. Delete o arquivo de configuração localizado em:
+   - **Linux:** `~/.config/br.tcc/onion_poc/config.json`
+   - **Windows:** `%AppData%\br.tcc\onion_poc\config.json`
+3. Abra o app novamente. Ele gerará um novo ID único e agora o Tracker mostrará "2 online".
+
+---
+
 ## 🔒 Dica de Ouro sobre as Chaves
 
-Lembre-se: Dentro deste `docker-compose.yml`, deixei mapeado um Volume chamado `tor_keys`. Ele protege literalmente seu "Domínio" contra perda de dados. Se amanhã você cancelar sua VPS ou desligar o PC, para "reciclar" o mesmo link Onion, você precisa transferir/fazer backup dos arquivos que foram gerados ali pelo Docker. Se um dia perder isso, o Docker inventará *um novo link .onion* quando ligar de novo e os apps antigos que você distribuiu mundo afora se perderão dele!
+ Lembre-se: Dentro deste `docker-compose.yml`, deixei mapeado um Volume chamado `tor_keys`. Ele protege literalmente seu "Domínio" contra perda de dados. Se amanhã você cancelar sua VPS ou desligar o PC, para "reciclar" o mesmo link Onion, você precisa transferir/fazer backup dos arquivos que foram gerados ali pelo Docker. Se um dia perder isso, o Docker inventará *um novo link .onion* quando ligar de novo e os apps antigos que você distribuiu mundo afora se perderão dele!

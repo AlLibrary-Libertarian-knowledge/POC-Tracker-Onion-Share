@@ -87,6 +87,33 @@ async fn swarm_lookup(
     Json(SwarmLookupResponse { file })
 }
 
+#[derive(Serialize)]
+struct DebugNodesResponse {
+    count: usize,
+    nodes: Vec<DebugNode>,
+}
+
+#[derive(Serialize)]
+struct DebugNode {
+    node_id: String,
+    onion: String,
+    files_count: usize,
+}
+
+async fn debug_nodes(State(state): State<TrackerState>) -> Json<DebugNodesResponse> {
+    let nodes = state.nodes.lock().await;
+    let list = nodes.iter().map(|(id, n)| DebugNode {
+        node_id: id.clone(),
+        onion: n.onion.clone(),
+        files_count: n.files.len(),
+    }).collect();
+
+    Json(DebugNodesResponse {
+        count: nodes.len(),
+        nodes: list,
+    })
+}
+
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<TrackerState>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
@@ -113,6 +140,7 @@ async fn handle_socket(socket: WebSocket, state: TrackerState) {
                     Some(Ok(Message::Text(text))) => {
                         match serde_json::from_str::<WsClientMessage>(&text) {
                             Ok(WsClientMessage::Announce { node_id, onion, files }) => {
+                                tracing::info!("Announce: node_id={}, onion={}, files={}", node_id, onion, files.len());
                                 current_node_id = Some(node_id.clone());
                                 let mut nodes = state.nodes.lock().await;
                                 nodes.insert(node_id, Node {
@@ -170,6 +198,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/ws", get(ws_handler))
         .route("/lobby", get(lobby))
         .route("/swarm/:content_hash", get(swarm_lookup))
+        .route("/debug/nodes", get(debug_nodes))
         .with_state(state.clone());
 
     let cleanup_state = state.clone();
