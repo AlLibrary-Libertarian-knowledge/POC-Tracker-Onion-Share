@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use uuid::Uuid;
 
-use crate::tracker_proto::{NetworkFile, NetworkLobby};
+use crate::tracker_proto::NetworkLobby;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Comandos da GUI → background

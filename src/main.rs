@@ -7,6 +7,7 @@ mod server;
 mod share;
 mod tor;
 mod wizard; // mantido para installer + TERMS_TEXT
+mod tracker_proto;
 
 use std::path::PathBuf;
 
