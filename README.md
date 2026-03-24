@@ -117,11 +117,11 @@ Toda essa orquestra militar dentro de **um binário veloz de interface limpa!** 
 
 ---
 
-## 🔄 Evolução: O Que Mudou na v0.7.0?
+## 🔄 Evolução: O Que Mudou na v0.7.5?
 
 A versão atual (**0.7.0**) representa uma evolução fundamental em relação à arquitetura anterior. Abaixo, detalhamos o salto de um discovery simples para um sistema de enxame (**Swarm**) moderno:
 
-| Característica | Arquitetura Antiga (v0.6.x) | Nova Arquitetura Swarm (v0.7.0) | Benefício |
+| Característica | Arquitetura Antiga (v0.6.x) | Nova Arquitetura Swarm (v0.7.5) | Benefício |
 | --- | --- | --- | --- |
 | **Protocolo Tracker** | HTTP Long-polling (lento) | **WebSocket Bi-direcional** | Lobby atualizado em tempo real. |
 | **Identificação** | Nome do arquivo (Vulnerável a colisão) | **BLAKE3 Content Hash** | Identifica conteúdo único globalmente. |
@@ -131,7 +131,7 @@ A versão atual (**0.7.0**) representa uma evolução fundamental em relação �
 
 ### 🛠️ Por que usar Hash BLAKE3?
 
-Diferente da versão anterior que dependia de links únicos (como o OnionShare original), a v0.7.0 implementa **descoberta baseada em conteúdo**. Se você tiver o `installer.iso` e outras 5 pessoas também tiverem (mesmo com nomes de arquivo diferentes), o sistema reconhece o hash e permite que você "puxe" os chunks de todos esses peers em paralelo, aumentando a disponibilidade e velocidade (similar ao BitTorrent).
+Diferente da versão anterior que dependia de links únicos (como o OnionShare original), a v0.7.5 implementa **descoberta baseada em conteúdo**. Se você tiver o `installer.iso` e outras 5 pessoas também tiverem (mesmo com nomes de arquivo diferentes), o sistema reconhece o hash e permite que você "puxe" os chunks de todos esses peers em paralelo, aumentando a disponibilidade e velocidade (similar ao BitTorrent).
 
 ---
 
