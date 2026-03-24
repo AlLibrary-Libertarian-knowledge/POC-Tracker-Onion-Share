@@ -17,6 +17,7 @@ pub enum GuiControl {
     RemoveFile(Uuid),
     DownloadItem(String, PathBuf),
     RefreshTracker,
+    AddBootstrapPeer(String),
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

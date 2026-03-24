@@ -1,5 +1,5 @@
 /// GUI principal do onion-poc — egui/eframe
-/// v0.7.0: paleta corrigida, file dialog não-bloqueante, auto-start Tor pós-termos, WebSocket support
+/// v0.8.1: paleta corrigida, file dialog não-bloqueante, auto-start Tor pós-termos, WebSocket support
 use std::time::{Duration, Instant};
 
 use egui::{Color32, FontId, RichText, Stroke, Vec2};
@@ -87,6 +87,9 @@ pub struct GuiApp {
     // Status + clipboard feedback
     status_msg: Option<(String, Instant, Color32)>,
     clipboard_msg: Option<(String, Instant)>,
+
+    // WAN discovery
+    pub bootstrap_peer_input: String,
 }
 
 impl GuiApp {
@@ -115,6 +118,7 @@ impl GuiApp {
                 .and_then(|u| u.download_dir().map(|p| p.to_path_buf())),
             status_msg: None,
             clipboard_msg: None,
+            bootstrap_peer_input: String::new(),
         }
     }
 
@@ -559,7 +563,7 @@ impl GuiApp {
 
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.add_space(4.0);
-                    ui.label(RichText::new("v0.7.0 • MIT License").size(9.0).color(C_DIM));
+                    ui.label(RichText::new("v0.8.1 • MIT License").size(9.0).color(C_DIM));
                 });
             });
     }
@@ -1083,7 +1087,77 @@ impl GuiApp {
         ui.label(RichText::new("Estes são os arquivos compartilhados publicamente pelas pessoas conectadas ao onion-poc.").color(C_TEXT2).size(12.0));
         ui.add_space(8.0);
 
-        card(ui, "Filtro", |ui| {
+        // --- CONEXÃO WAN (ADICIONAR PEER) ---
+        card(ui, "🔗 Conexão Direta (WAN / Amigos)", |ui| {
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.label(
+                        RichText::new("Seu Endereço Onion (compartilhe com amigos):")
+                            .color(C_DIM)
+                            .size(11.0),
+                    );
+                    let addr = self
+                        .shared
+                        .lock()
+                        .unwrap()
+                        .onion_addr
+                        .clone()
+                        .unwrap_or_else(|| "aguardando ativação...".to_string());
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(&addr).color(C_CYAN).monospace().size(11.0));
+                        if ui.button("📋 Copiar").clicked() {
+                            ui.output_mut(|o| o.copy_text = addr.clone());
+                            // self.set_status se tivessemos um pra clipboard aqui mas o overlay já é suficiente
+                        }
+                    });
+                });
+            });
+
+            ui.add_space(8.0);
+            ui.separator();
+            ui.add_space(8.0);
+
+            ui.vertical(|ui| {
+                ui.label(
+                    RichText::new("Adicionar endereço de um amigo para pareamento:")
+                        .color(C_TEXT2)
+                        .size(12.0),
+                );
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.bootstrap_peer_input)
+                            .hint_text("Ex: http://nomedoamigo.onion")
+                            .min_size(Vec2::new(340.0, 26.0)),
+                    );
+
+                    let btn = egui::Button::new(RichText::new("🔌 Conectar").size(12.0).strong())
+                        .fill(C_ACCENT)
+                        .rounding(4.0);
+
+                    if ui.add(btn).clicked() {
+                        let peer = self.bootstrap_peer_input.clone();
+                        if !peer.is_empty() {
+                            self.send(GuiControl::AddBootstrapPeer(peer));
+                            self.bootstrap_peer_input.clear();
+                            // self.set_status("Pareamento iniciado! Aguarde alguns instantes...", C_ACCENT);
+                        }
+                    }
+                });
+                ui.add_space(2.0);
+                ui.label(
+                    RichText::new(
+                        "Dica: Em até 60s o protocolo Gossip sincronizará os arquivos entre vocês.",
+                    )
+                    .size(10.0)
+                    .color(C_DIM),
+                );
+            });
+        });
+
+        ui.add_space(14.0);
+
+        card(ui, "🔍 Filtro de Pesquisa", |ui| {
             ui.horizontal(|ui| {
                 ui.label(RichText::new("Palavra-chave: ").color(C_TEXT).size(12.5));
                 ui.add(
@@ -1171,7 +1245,7 @@ impl GuiApp {
     fn draw_about(&self, ui: &mut egui::Ui) {
         card(ui, "ℹ️ Sobre o onion-poc", |ui| {
             ui.label(
-                RichText::new("🧅 onion-poc v0.7.0")
+                RichText::new("🧅 onion-poc v0.8.1")
                     .size(19.0)
                     .color(C_ACCENT)
                     .strong(),

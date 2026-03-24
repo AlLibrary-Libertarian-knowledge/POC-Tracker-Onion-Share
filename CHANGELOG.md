@@ -3,6 +3,19 @@
 Todas as mudanças notáveis neste projeto são documentadas aqui.  
 Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/) | Versioning: [SemVer](https://semver.org).
 
+## [0.8.1] — 2026-03-24
+
+### ✨ Conectividade WAN (Anti-Isolamento)
+
+- **Pareamento Manual de Peers** — Adicionada funcionalidade na aba "Buscar" que permite adicionar o endereço Onion de um amigo manualmente. Isso resolve o problema de descoberta em redes WAN onde o Multicast UDP (LAN) não alcança.
+- **Sincronização Gossip Forçada** — Ao adicionar um peer manualmente, o protocolo Gossip inicia a sincronização de arquivos anônimos em menos de 60 segundos.
+- **Copy-to-Clipboard do Onion** — Novo botão para copiar seu próprio endereço Onion com um clique, facilitando o compartilhamento seguro via outros canais (ex: Signal).
+
+### 🐧 Multi-plataforma & Estabilidade
+
+- **Consolidação Windows/Linux** — Testes de compartilhamento anônimo validados com sucesso em ambos os sistemas operacionais.
+- **Sucesso em LAN** — Confirmada a eficácia da descoberta descentralizada e transferência em rede local.
+
 ---
 
 ## [0.8.0] — 2026-03-17

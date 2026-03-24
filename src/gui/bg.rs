@@ -160,6 +160,19 @@ async fn run(shared: SharedStateRef, initial_tor_path: String) {
                 GuiControl::RefreshTracker => {
                     refresh_discovery_snapshot(shared.clone());
                 }
+                GuiControl::AddBootstrapPeer(onion) => {
+                    let mut onion = onion.trim().to_string();
+                    if !onion.is_empty() {
+                        if !onion.starts_with("http") {
+                            onion = format!("http://{}", onion);
+                        }
+                        let mut cfg = AppConfig::load();
+                        if !cfg.bootstrap_peers.contains(&onion) {
+                            cfg.bootstrap_peers.push(onion);
+                            let _ = cfg.save();
+                        }
+                    }
+                }
             }
         }
 
