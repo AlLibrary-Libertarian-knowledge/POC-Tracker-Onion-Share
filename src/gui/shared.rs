@@ -17,6 +17,8 @@ pub enum GuiControl {
     RemoveFile(Uuid),
     DownloadItem(String, PathBuf),
     RefreshTracker,
+    /// Adiciona um peer manual para descoberta (WAN Anti-Isolation)
+    AddBootstrapPeer(String),
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

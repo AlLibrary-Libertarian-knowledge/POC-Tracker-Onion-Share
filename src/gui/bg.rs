@@ -10,7 +10,7 @@ use crate::server::ShareServerHandle;
 use crate::wizard::installer;
 
 use super::shared::{GuiControl, SharedFileInfo, SharedStateRef, TorInitState};
-use crate::tracker_proto::{AnnouncedFile, NetworkFile, NetworkLobby, WsClientMessage, WsServerMessage};
+use crate::tracker_proto::{AnnouncedFile, NetworkFile, NetworkLobby, PeerLocation, WsClientMessage, WsServerMessage};
 use futures_util::{SinkExt, StreamExt, future::Either};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::client_async_with_config;
@@ -32,6 +32,11 @@ async fn run(shared: SharedStateRef, initial_tor_path: String) {
     let tracker_shared = shared.clone();
     tokio::spawn(async move {
         tracker_ws_loop(tracker_shared).await;
+    });
+    
+    let static_shared = shared.clone();
+    tokio::spawn(async move {
+        static_peers_loop(static_shared).await;
     });
 
     loop {
@@ -165,6 +170,20 @@ async fn run(shared: SharedStateRef, initial_tor_path: String) {
                     tokio::spawn(async move {
                         sync_tracker(ts).await;
                     });
+                }
+
+                GuiControl::AddBootstrapPeer(onion) => {
+                    let mut onion = onion.trim().to_string();
+                    if !onion.is_empty() {
+                        if !onion.starts_with("http://") {
+                            onion = format!("http://{}", onion);
+                        }
+                        let mut cfg = AppConfig::load();
+                        if !cfg.bootstrap_peers.contains(&onion) {
+                            cfg.bootstrap_peers.push(onion);
+                            let _ = cfg.save();
+                        }
+                    }
                 }
             }
         }
@@ -637,6 +656,72 @@ async fn sync_tracker(tracker_shared: SharedStateRef) {
             if let Ok(lobby) = res.json::<NetworkLobby>().await {
                 tracker_shared.lock().unwrap().global_lobby = lobby;
             }
+        }
+    }
+}
+
+async fn static_peers_loop(shared: SharedStateRef) {
+    let mut interval = tokio::time::interval(Duration::from_secs(45));
+    loop {
+        interval.tick().await;
+
+        let (tor_active, socks_addr, peers) = {
+            let s = shared.lock().unwrap();
+            let cfg = AppConfig::load();
+            (s.tor_active, s.tor_socks_addr.clone(), cfg.bootstrap_peers.clone())
+        };
+
+        if !tor_active || peers.is_empty() {
+            continue;
+        }
+
+        for peer_base_url in peers {
+            let shared_inner = shared.clone();
+            let socks_inner = socks_addr.clone();
+            tokio::spawn(async move {
+                if let Ok(client) = build_http_client(&peer_base_url, socks_inner) {
+                    let url = format!("{}/files", peer_base_url.trim_end_matches('/'));
+                    if let Ok(resp) = client.get(&url).send().await {
+                        if let Ok(files) = resp.json::<Vec<crate::server::routes::FileEntry>>().await {
+                            let mut s = shared_inner.lock().unwrap();
+                            let onion_host = peer_base_url
+                                .replace("http://", "")
+                                .replace("https://", "")
+                                .trim_end_matches('/')
+                                .to_string();
+                                
+                            for f in files {
+                                let entry = s.global_lobby.files.iter_mut().find(|nf| nf.content_hash == f.content_hash);
+                                if let Some(nf) = entry {
+                                    if !nf.peers.iter().any(|p| p.onion == onion_host) {
+                                        nf.peers.push(PeerLocation {
+                                            node_id: "[Peer Direto]".into(),
+                                            onion: onion_host.clone(),
+                                            file_id: f.file_id,
+                                            link: format!("opoc://{}/s/{}#Manual", onion_host, f.file_id),
+                                        });
+                                        nf.peer_count = nf.peers.len();
+                                    }
+                                } else {
+                                    s.global_lobby.files.push(NetworkFile {
+                                        name: f.file_name,
+                                        size: f.file_size,
+                                        link: format!("opocswarm://swarm/{}#Manual", f.content_hash),
+                                        content_hash: f.content_hash,
+                                        peer_count: 1,
+                                        peers: vec![PeerLocation {
+                                            node_id: "[Peer Direto]".into(),
+                                            onion: onion_host.clone(),
+                                            file_id: f.file_id,
+                                            link: format!("opoc://{}/s/{}#Manual", onion_host, f.file_id),
+                                        }],
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            });
         }
     }
 }

@@ -41,6 +41,7 @@ pub struct FileEntry {
     pub file_size: u64,
     pub total_chunks: u64,
     pub cipher: String,
+    pub content_hash: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,6 +72,7 @@ async fn list_files(State(state): State<AppState>) -> Json<Vec<FileEntry>> {
             file_size: s.file_size,
             total_chunks: s.total_chunks,
             cipher: "XChaCha20-Poly1305".into(),
+            content_hash: s.content_hash.clone(),
         })
         .collect();
     Json(entries)

@@ -84,6 +84,10 @@ pub struct GuiApp {
     download_link_input: String,
     download_dir: Option<std::path::PathBuf>,
 
+    // Anti-Isolation state (v0.7.5 hotfix)
+    peer_input: String,
+    tracker_input: String,
+
     // Status + clipboard feedback
     status_msg: Option<(String, Instant, Color32)>,
     clipboard_msg: Option<(String, Instant)>,
@@ -99,7 +103,7 @@ impl GuiApp {
 
         Self {
             shared,
-            config,
+            config: config.clone(),
             view: View::Dashboard,
             terms_scroll_y: 0.0,
             terms_content_h: 9999.0,
@@ -111,6 +115,8 @@ impl GuiApp {
             file_dialog_rx: None,
             folder_dialog_rx: None,
             download_link_input: String::new(),
+            peer_input: String::new(),
+            tracker_input: config.tracker_url.clone(),
             download_dir: directories::UserDirs::new()
                 .and_then(|u| u.download_dir().map(|p| p.to_path_buf())),
             status_msg: None,
@@ -1083,7 +1089,49 @@ impl GuiApp {
         ui.label(RichText::new("Estes são os arquivos compartilhados publicamente pelas pessoas conectadas ao onion-poc.").color(C_TEXT2).size(12.0));
         ui.add_space(8.0);
 
-        card(ui, "Filtro", |ui| {
+        card(ui, "📡 Canais de Descoberta (Anti-Isolamento)", |ui| {
+            ui.vertical(|ui| {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new("Servidor Tracker: ")
+                            .color(C_TEXT2)
+                            .size(11.5),
+                    );
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.tracker_input)
+                            .min_size(Vec2::new(280.0, 24.0)),
+                    );
+                    if ui.button("💾 Salvar").clicked() {
+                        let mut cfg = AppConfig::load();
+                        cfg.tracker_url = self.tracker_input.clone();
+                        let _ = cfg.save();
+                        self.set_status("URL do Tracker atualizada!", C_GREEN);
+                    }
+                });
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new("Conectar a Amigo (Onion): ")
+                            .color(C_TEXT2)
+                            .size(11.5),
+                    );
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.peer_input)
+                            .hint_text("ex: abcxyz...onion")
+                            .min_size(Vec2::new(280.0, 24.0)),
+                    );
+                    if ui.button("➕ Conectar").clicked() {
+                        self.send(GuiControl::AddBootstrapPeer(self.peer_input.clone()));
+                        self.set_status("Peer adicionado! Buscando arquivos...", C_GREEN);
+                        self.peer_input.clear();
+                    }
+                });
+            });
+        });
+
+        ui.add_space(10.0);
+
+        card(ui, "🔎 Filtro de Resultados", |ui| {
             ui.horizontal(|ui| {
                 ui.label(RichText::new("Palavra-chave: ").color(C_TEXT).size(12.5));
                 ui.add(
