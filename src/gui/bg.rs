@@ -639,11 +639,18 @@ where S: SinkExt<Message, Error = tokio_tungstenite::tungstenite::Error> + Strea
     Ok(())
 }
 
-async fn sync_tracker(tracker_shared: SharedStateRef) {
-    let (tor_active, socks_addr, tracker_url) = {
-        let s = tracker_shared.lock().unwrap();
+async fn sync_tracker(shared: SharedStateRef) {
+    let (tor_active, socks_addr, tracker_url, node_id, files, onion) = {
+        let s = shared.lock().unwrap();
         let cfg = AppConfig::load();
-        (s.tor_active, s.tor_socks_addr.clone(), cfg.tracker_url)
+        (
+            s.tor_active,
+            s.tor_socks_addr.clone(),
+            cfg.tracker_url,
+            cfg.node_id.clone(),
+            s.shared_files.clone(),
+            s.onion_addr.clone(),
+        )
     };
 
     if !tor_active {
@@ -652,9 +659,35 @@ async fn sync_tracker(tracker_shared: SharedStateRef) {
 
     let tracker_url = tracker_url.trim_end_matches('/').to_string();
     if let Ok(client) = build_http_client(&tracker_url, socks_addr) {
+        // Envia anúncio via HTTP (Fallback robusto para WAN/Tor)
+        if let Some(onion) = onion {
+            let files_announced: Vec<AnnouncedFile> = files
+                .into_iter()
+                .map(|f| AnnouncedFile {
+                    file_id: f.file_id,
+                    name: f.name,
+                    size: f.size,
+                    link: f.link,
+                    content_hash: f.content_hash,
+                })
+                .collect();
+
+            let announce_msg = WsClientMessage::Announce {
+                node_id,
+                onion,
+                files: files_announced,
+            };
+            let _ = client
+                .post(format!("{}/announce", tracker_url))
+                .json(&announce_msg)
+                .send()
+                .await;
+        }
+
+        // Busca o lobby global
         if let Ok(res) = client.get(format!("{}/lobby", tracker_url)).send().await {
             if let Ok(lobby) = res.json::<NetworkLobby>().await {
-                tracker_shared.lock().unwrap().global_lobby = lobby;
+                shared.lock().unwrap().global_lobby = lobby;
             }
         }
     }

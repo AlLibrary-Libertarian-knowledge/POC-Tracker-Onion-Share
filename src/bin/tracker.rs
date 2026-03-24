@@ -1,10 +1,11 @@
 use axum::{
     extract::{Path, State, WebSocketUpgrade},
     response::IntoResponse,
-    routing::get,
     Json, Router,
 };
 use axum::extract::ws::{Message, WebSocket};
+use axum::http::StatusCode;
+use axum::routing::{get, post};
 use futures_util::{SinkExt, StreamExt};
 use onion_poc::tracker_proto::{AnnouncedFile, NetworkFile, NetworkLobby, PeerLocation, WsClientMessage, WsServerMessage};
 use serde::Serialize;
@@ -115,6 +116,27 @@ async fn debug_nodes(State(state): State<TrackerState>) -> Json<DebugNodesRespon
     })
 }
 
+/// Fallback HTTP Announce handler (mais robusto que WS em redes instáveis/WAN)
+async fn announce_http(
+    State(state): State<TrackerState>,
+    Json(msg): Json<WsClientMessage>,
+) -> StatusCode {
+    if let WsClientMessage::Announce { node_id, onion, files } = msg {
+        tracing::info!("HTTP Announce: node_id={}, onion={}, files={}", node_id, onion, files.len());
+        let mut nodes = state.nodes.lock().await;
+        nodes.insert(node_id, Node {
+            last_seen: Instant::now(),
+            onion,
+            files,
+        });
+        drop(nodes);
+        push_lobby(&state).await;
+        StatusCode::OK
+    } else {
+        StatusCode::BAD_REQUEST
+    }
+}
+
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<TrackerState>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
@@ -195,8 +217,10 @@ async fn main() -> anyhow::Result<()> {
         lobby_tx,
     };
 
+
     let app = Router::new()
         .route("/ws", get(ws_handler))
+        .route("/announce", post(announce_http))
         .route("/lobby", get(lobby))
         .route("/swarm/:content_hash", get(swarm_lookup))
         .route("/debug/nodes", get(debug_nodes))
