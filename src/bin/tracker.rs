@@ -144,7 +144,6 @@ async fn ws_handler(ws: WebSocketUpgrade, State(state): State<TrackerState>) -> 
 async fn handle_socket(socket: WebSocket, state: TrackerState) {
     let (mut sender, mut receiver) = socket.split();
     let mut rx = state.lobby_tx.subscribe();
-    let mut current_node_id: Option<String> = None;
 
     if let Ok(initial) = serde_json::to_string(&WsServerMessage::Lobby {
         lobby: {
@@ -164,7 +163,6 @@ async fn handle_socket(socket: WebSocket, state: TrackerState) {
                         match serde_json::from_str::<WsClientMessage>(&text) {
                             Ok(WsClientMessage::Announce { node_id, onion, files }) => {
                                 tracing::info!("Announce: node_id={}, onion={}, files={}", node_id, onion, files.len());
-                                current_node_id = Some(node_id.clone());
                                 let mut nodes = state.nodes.lock().await;
                                 nodes.insert(node_id, Node {
                                     last_seen: Instant::now(),
@@ -199,12 +197,9 @@ async fn handle_socket(socket: WebSocket, state: TrackerState) {
         }
     }
 
-    if let Some(node_id) = current_node_id {
-        let mut nodes = state.nodes.lock().await;
-        nodes.remove(&node_id);
-        drop(nodes);
-        push_lobby(&state).await;
-    }
+    // Do not remove the node on WebSocket disconnect: the same client may also use HTTP /announce
+    // (AlLibrary + POC pattern). Removing here caused nodes to vanish immediately when WS dropped.
+    // Stale entries are pruned by `last_seen` (30s) in push_lobby / lobby / announce paths.
 }
 
 #[tokio::main]
