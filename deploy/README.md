@@ -43,7 +43,7 @@ docker compose exec tor_service cat /var/lib/tor/hidden_service/hostname
 ```
 
 A saída será algo como:
-`3phps2siiwstimug2mipw7tlizdvdmfydjf5clb7phujg4yfnkrh56qd.onion`
+`3anhnwqwxmjo7xsyxs3uoocdctxd3nwkfm5lt36xcwi4hfmkbttoktqd.onion`
 
 🎊 **Parabéns! Esse é o IP/Domínio permanente do seu Servidor P2P para toda a vida!** 🎊
 
@@ -56,7 +56,7 @@ Guarde o Link! Ele será introduzido no código do Cliente (no arquivo `src/conf
 3. Troque a variável `tracker_url` para algo assim:
 
 ```rust
-tracker_url: "http://3phps2siiwstimug2mipw7tlizdvdmfydjf5clb7phujg4yfnkrh56qd.onion".to_string(),
+tracker_url: "http://3anhnwqwxmjo7xsyxs3uoocdctxd3nwkfm5lt36xcwi4hfmkbttoktqd.onion".to_string(),
 ```
 
 > *(Atenção, o prefixo DEVE ser `http://` ao invés de `https://` porque a própria rede do Tor já criptografa tudo ponta-a-ponta)*
