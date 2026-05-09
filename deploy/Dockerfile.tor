@@ -1,0 +1,10 @@
+# Pinned Alpine + Tor baked at build time (no runtime `apk add` — avoids CDN/DNS failures on Windows Docker Desktop).
+FROM alpine:3.21
+
+RUN apk add --no-cache tor
+
+COPY tor-entrypoint.sh /tor-entrypoint.sh
+# Windows checkouts often use CRLF; kernel/shebang then fails with "no such file or directory"
+RUN sed -i 's/\r$//' /tor-entrypoint.sh && chmod +x /tor-entrypoint.sh
+
+ENTRYPOINT ["/bin/sh", "/tor-entrypoint.sh"]

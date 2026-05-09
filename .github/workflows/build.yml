@@ -5,7 +5,7 @@ name: CI / Release
 # ─────────────────────────────────────────────────────────────────────────────
 on:
   push:
-    branches: [main]
+    branches: [main, websocket-blake3]
     tags:
       - "v*"
   pull_request:

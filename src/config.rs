@@ -15,6 +15,8 @@ pub struct AppConfig {
     pub tracker_url: String,
     /// Se true, arquivos compartilhados vão para o lobby público
     pub share_publicly: bool,
+    /// Lista de peers estáticos para conexão direta (Manual Pairing)
+    pub bootstrap_peers: Vec<String>,
 }
 
 impl Default for AppConfig {
@@ -23,9 +25,10 @@ impl Default for AppConfig {
             terms_accepted: false,
             tor_path: String::new(),
             node_id: uuid::Uuid::new_v4().to_string(),
-            tracker_url: "http://3phps2siiwstimug2mipw7tlizdvdmfydjf5clb7phujg4yfnkrh56qd.onion"
+            tracker_url: "http://3anhnwqwxmjo7xsyxs3uoocdctxd3nwkfm5lt36xcwi4hfmkbttoktqd.onion"
                 .to_string(),
             share_publicly: true,
+            bootstrap_peers: Vec::new(),
         }
     }
 }

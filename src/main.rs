@@ -7,6 +7,7 @@ mod server;
 mod share;
 mod tor;
 mod wizard; // mantido para installer + TERMS_TEXT
+mod tracker_proto;
 
 use std::path::PathBuf;
 
@@ -65,11 +66,8 @@ fn main() -> anyhow::Result<()> {
                 .enable_all()
                 .build()?;
             let file = file.canonicalize().context("invalid --file")?;
-            let key = match key {
-                Some(s) => crypto::key_from_b64url(&s)?,
-                None => crypto::random_key(),
-            };
-            let share = share::Share::new(file, chunk_size, key)?;
+            let _ = key;
+            let share = share::Share::new(file, chunk_size)?;
             rt.block_on(server::run_share_server(share, tor_path))?;
         }
 

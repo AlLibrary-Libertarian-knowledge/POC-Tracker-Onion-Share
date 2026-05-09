@@ -1,11 +1,9 @@
 /// GUI principal do onion-poc — egui/eframe
-/// v0.3.1: paleta corrigida, file dialog não-bloqueante, auto-start Tor pós-termos
-use std::sync::{Arc, Mutex};
+/// v0.7.0: paleta corrigida, file dialog não-bloqueante, auto-start Tor pós-termos, WebSocket support
 use std::time::{Duration, Instant};
 
 use egui::{Color32, FontId, RichText, Stroke, Vec2};
-use uuid::Uuid;
-
+// use uuid::Uuid;
 use crate::config::AppConfig;
 
 use super::shared::{GuiControl, SharedFileInfo, SharedStateRef, TorInitState};
@@ -86,6 +84,10 @@ pub struct GuiApp {
     download_link_input: String,
     download_dir: Option<std::path::PathBuf>,
 
+    // Anti-Isolation state (v0.7.5 hotfix)
+    peer_input: String,
+    tracker_input: String,
+
     // Status + clipboard feedback
     status_msg: Option<(String, Instant, Color32)>,
     clipboard_msg: Option<(String, Instant)>,
@@ -101,7 +103,7 @@ impl GuiApp {
 
         Self {
             shared,
-            config,
+            config: config.clone(),
             view: View::Dashboard,
             terms_scroll_y: 0.0,
             terms_content_h: 9999.0,
@@ -113,6 +115,8 @@ impl GuiApp {
             file_dialog_rx: None,
             folder_dialog_rx: None,
             download_link_input: String::new(),
+            peer_input: String::new(),
+            tracker_input: config.tracker_url.clone(),
             download_dir: directories::UserDirs::new()
                 .and_then(|u| u.download_dir().map(|p| p.to_path_buf())),
             status_msg: None,
@@ -561,7 +565,7 @@ impl GuiApp {
 
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.add_space(4.0);
-                    ui.label(RichText::new("v0.3.1 • MIT License").size(9.0).color(C_DIM));
+                    ui.label(RichText::new("v0.7.0 • MIT License").size(9.0).color(C_DIM));
                 });
             });
     }
@@ -1003,13 +1007,23 @@ impl GuiApp {
                                             dl.speed_bytes_per_sec
                                         )
                                     );
+                                    let eta_str = dl
+                                        .eta_seconds
+                                        .map(|s| {
+                                            format!(
+                                                " • ETA: {}",
+                                                crate::gui::shared::SharedState::fmt_duration(s)
+                                            )
+                                        })
+                                        .unwrap_or_default();
 
                                     ui.horizontal(|ui| {
                                         ui.label(
                                             RichText::new(format!(
-                                                "{:.1}% — {}",
+                                                "{:.1}% — {}{}",
                                                 dl.progress * 100.0,
-                                                dl.status
+                                                dl.status,
+                                                eta_str
                                             ))
                                             .color(C_CYAN)
                                             .size(10.5),
@@ -1048,7 +1062,7 @@ impl GuiApp {
     fn draw_search(
         &mut self,
         ui: &mut egui::Ui,
-        network_files: &[crate::gui::shared::NetworkFile],
+        network_files: &[crate::tracker_proto::NetworkFile],
     ) {
         ui.horizontal(|ui| {
             ui.label(
@@ -1075,7 +1089,49 @@ impl GuiApp {
         ui.label(RichText::new("Estes são os arquivos compartilhados publicamente pelas pessoas conectadas ao onion-poc.").color(C_TEXT2).size(12.0));
         ui.add_space(8.0);
 
-        card(ui, "Filtro", |ui| {
+        card(ui, "📡 Canais de Descoberta (Anti-Isolamento)", |ui| {
+            ui.vertical(|ui| {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new("Servidor Tracker: ")
+                            .color(C_TEXT2)
+                            .size(11.5),
+                    );
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.tracker_input)
+                            .min_size(Vec2::new(280.0, 24.0)),
+                    );
+                    if ui.button("💾 Salvar").clicked() {
+                        let mut cfg = AppConfig::load();
+                        cfg.tracker_url = self.tracker_input.clone();
+                        let _ = cfg.save();
+                        self.set_status("URL do Tracker atualizada!", C_GREEN);
+                    }
+                });
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new("Conectar a Amigo (Onion): ")
+                            .color(C_TEXT2)
+                            .size(11.5),
+                    );
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.peer_input)
+                            .hint_text("ex: abcxyz...onion")
+                            .min_size(Vec2::new(280.0, 24.0)),
+                    );
+                    if ui.button("➕ Conectar").clicked() {
+                        self.send(GuiControl::AddBootstrapPeer(self.peer_input.clone()));
+                        self.set_status("Peer adicionado! Buscando arquivos...", C_GREEN);
+                        self.peer_input.clear();
+                    }
+                });
+            });
+        });
+
+        ui.add_space(10.0);
+
+        card(ui, "🔎 Filtro de Resultados", |ui| {
             ui.horizontal(|ui| {
                 ui.label(RichText::new("Palavra-chave: ").color(C_TEXT).size(12.5));
                 ui.add(
@@ -1112,8 +1168,9 @@ impl GuiApp {
                                 ui.label(RichText::new(&f.name).color(C_TEXT).size(13.5).strong());
                                 ui.label(
                                     RichText::new(format!(
-                                        "Tamanho: {}",
-                                        crate::gui::shared::SharedState::fmt_bytes(f.size)
+                                        "Tamanho: {} • Peers: {}",
+                                        crate::gui::shared::SharedState::fmt_bytes(f.size),
+                                        f.peer_count
                                     ))
                                     .color(C_TEXT2)
                                     .size(11.0),
@@ -1123,13 +1180,33 @@ impl GuiApp {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
-                                    let btn = egui::Button::new(RichText::new("Baixar").size(11.0))
-                                        .fill(C_PANEL2)
-                                        .stroke(Stroke::new(1.0, C_BORDER));
-                                    if ui.add(btn).clicked() {
+                                    let btn = egui::Button::new(
+                                        RichText::new("📥 Baixar Agora")
+                                            .color(Color32::WHITE)
+                                            .size(11.5)
+                                            .strong(),
+                                    )
+                                    .fill(C_GREEN)
+                                    .rounding(4.0)
+                                    .min_size(Vec2::new(100.0, 28.0));
+
+                                    if ui
+                                        .add(btn)
+                                        .on_hover_text("Clique para iniciar o download via Swarm")
+                                        .clicked()
+                                    {
                                         self.view = View::Download;
-                                        self.download_link_input = f.link.clone();
-                                        self.set_status("Link copiado para Download!", C_GREEN);
+                                        let tracker_url =
+                                            crate::config::AppConfig::load().tracker_url;
+                                        self.download_link_input = crate::link::SwarmLink {
+                                            tracker_url,
+                                            content_hash: f.content_hash.clone(),
+                                        }
+                                        .to_string();
+                                        self.set_status(
+                                            "Swarm link preparado para Download!",
+                                            C_GREEN,
+                                        );
                                     }
                                 },
                             );
@@ -1145,7 +1222,7 @@ impl GuiApp {
     fn draw_about(&self, ui: &mut egui::Ui) {
         card(ui, "ℹ️ Sobre o onion-poc", |ui| {
             ui.label(
-                RichText::new("🧅 onion-poc v0.3.1")
+                RichText::new("🧅 onion-poc v0.7.0")
                     .size(19.0)
                     .color(C_ACCENT)
                     .strong(),
@@ -1209,7 +1286,7 @@ impl GuiApp {
         .show(ctx, |ui| {
             let scroll_output = egui::ScrollArea::vertical()
                 .max_height(300.0)
-                .id_source("terms_scroll")
+                .id_salt("terms_scroll")
                 .show(ui, |ui| {
                     ui.label(
                         RichText::new(crate::wizard::app::App::TERMS_TEXT)

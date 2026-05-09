@@ -2,8 +2,9 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::tracker_proto::NetworkLobby;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Comandos da GUI → background
@@ -16,6 +17,8 @@ pub enum GuiControl {
     RemoveFile(Uuid),
     DownloadItem(String, PathBuf),
     RefreshTracker,
+    /// Adiciona um peer manual para descoberta (WAN Anti-Isolation)
+    AddBootstrapPeer(String),
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -33,6 +36,7 @@ pub struct DownloadState {
     pub is_done: bool,
     pub error: Option<String>,
     pub speed_bytes_per_sec: u64,
+    pub eta_seconds: Option<u64>,
     pub start_time: Option<Instant>,
 }
 
@@ -45,6 +49,7 @@ pub struct SharedFileInfo {
     pub name: String,
     pub size: u64,
     pub link: String,
+    pub content_hash: String,
     pub downloads: u64,
     pub _added_at: Instant,
 }
@@ -69,19 +74,8 @@ impl Default for TorInitState {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Rede (Tracker)
+// Tipos compartilhados em crate::tracker_proto
 // ─────────────────────────────────────────────────────────────────────────────
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NetworkFile {
-    pub name: String,
-    pub size: u64,
-    pub link: String,
-}
-
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
-pub struct NetworkLobby {
-    pub online_nodes: usize,
-    pub files: Vec<NetworkFile>,
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Estado compartilhado (GUI lê + background escreve)
@@ -135,6 +129,16 @@ impl SharedState {
             format!("{:.1} KB", b as f64 / KB as f64)
         } else {
             format!("{} B", b)
+        }
+    }
+
+    pub fn fmt_duration(secs: u64) -> String {
+        if secs >= 3600 {
+            format!("{}h {}m", secs / 3600, (secs % 3600) / 60)
+        } else if secs >= 60 {
+            format!("{}m {}s", secs / 60, secs % 60)
+        } else {
+            format!("{}s", secs)
         }
     }
 }

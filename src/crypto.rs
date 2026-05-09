@@ -66,3 +66,16 @@ pub fn decrypt_chunk(key: &FileKey, file_id: Uuid, chunk_index: u64, ciphertext:
         .map_err(|_| anyhow::anyhow!("decrypt failed (wrong key or corrupted data)"))?;
     Ok(pt)
 }
+
+
+pub fn content_hash_hex(bytes: &[u8]) -> String {
+    blake3::hash(bytes).to_hex().to_string()
+}
+
+pub fn key_from_content_hash(hash_hex: &str) -> anyhow::Result<FileKey> {
+    let raw = hex::decode(hash_hex).context("invalid content hash hex")?;
+    anyhow::ensure!(raw.len() >= 32, "content hash must be at least 32 bytes");
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&raw[..32]);
+    Ok(key)
+}

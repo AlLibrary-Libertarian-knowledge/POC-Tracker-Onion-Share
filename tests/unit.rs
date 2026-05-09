@@ -117,6 +117,7 @@ mod config_tests {
             node_id: "test-node".into(),
             tracker_url: "http://test-tracker".into(),
             share_publicly: false,
+            bootstrap_peers: Vec::new(),
         };
         assert_eq!(cfg.tor_bin(), "/usr/local/bin/tor");
         assert_eq!(cfg.effective_tor_path(), "/usr/local/bin/tor");
@@ -132,6 +133,7 @@ mod config_tests {
             node_id: "test-node".into(),
             tracker_url: "http://test-tracker".into(),
             share_publicly: false,
+            bootstrap_peers: Vec::new(),
         };
         // Verifica serialize/deserialize JSON
         let json = serde_json::to_string_pretty(&cfg).unwrap();

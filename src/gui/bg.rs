@@ -4,12 +4,17 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+use anyhow::Context;
 use crate::config::AppConfig;
-use crate::crypto;
 use crate::server::ShareServerHandle;
 use crate::wizard::installer;
 
-use super::shared::{GuiControl, NetworkFile, NetworkLobby, SharedFileInfo, SharedStateRef, TorInitState};
+use super::shared::{GuiControl, SharedFileInfo, SharedStateRef, TorInitState};
+use crate::tracker_proto::{AnnouncedFile, NetworkFile, NetworkLobby, PeerLocation, WsClientMessage, WsServerMessage};
+use futures_util::{SinkExt, StreamExt, future::Either};
+use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::client_async_with_config;
+use std::net::SocketAddr;
 
 pub fn run_blocking(shared: SharedStateRef, tor_path: String) {
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -23,14 +28,15 @@ async fn run(shared: SharedStateRef, initial_tor_path: String) {
     let mut server: Option<ShareServerHandle> = None;
     let mut tor_path = initial_tor_path;
 
-    // --- Task de Descoberta / Tracker (P2P Lobby) ---
+    // --- Task de Descoberta / Tracker (WebSocket + fallback manual HTTP) ---
     let tracker_shared = shared.clone();
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(5));
-        loop {
-            interval.tick().await;
-            sync_tracker(tracker_shared.clone()).await;
-        }
+        tracker_ws_loop(tracker_shared).await;
+    });
+    
+    let static_shared = shared.clone();
+    tokio::spawn(async move {
+        static_peers_loop(static_shared).await;
     });
 
     loop {
@@ -124,8 +130,7 @@ async fn run(shared: SharedStateRef, initial_tor_path: String) {
 
                 GuiControl::AddFile(path) => {
                     if let Some(ref h) = server {
-                        let key = crypto::random_key();
-                        match h.add_file(path, 256 * 1024, key).await {
+                        match h.add_file(path, 256 * 1024).await {
                             Ok(share) => {
                                 let link = h.link_for(&share);
                                 shared.lock().unwrap().shared_files.push(SharedFileInfo {
@@ -133,6 +138,7 @@ async fn run(shared: SharedStateRef, initial_tor_path: String) {
                                     name: share.file_name.clone(),
                                     size: share.file_size,
                                     link,
+                                    content_hash: share.content_hash.clone(),
                                     downloads: 0,
                                     _added_at: Instant::now(),
                                 });
@@ -164,6 +170,20 @@ async fn run(shared: SharedStateRef, initial_tor_path: String) {
                     tokio::spawn(async move {
                         sync_tracker(ts).await;
                     });
+                }
+
+                GuiControl::AddBootstrapPeer(onion) => {
+                    let mut onion = onion.trim().to_string();
+                    if !onion.is_empty() {
+                        if !onion.starts_with("http://") {
+                            onion = format!("http://{}", onion);
+                        }
+                        let mut cfg = AppConfig::load();
+                        if !cfg.bootstrap_peers.contains(&onion) {
+                            cfg.bootstrap_peers.push(onion);
+                            let _ = cfg.save();
+                        }
+                    }
                 }
             }
         }
@@ -312,17 +332,18 @@ fn spawn_download_task(
             progress: 0.0,
             bytes_downloaded: 0,
             total_bytes: 0,
-            status: "Conectando ao OnionShare...".into(),
+            status: "Conectando ao tracker/peer...".into(),
             is_done: false,
             error: None,
             speed_bytes_per_sec: 0,
+            eta_seconds: None,
             start_time: None,
         });
     }
 
     tokio::spawn(async move {
         macro_rules! update {
-            ($p:expr, $bd:expr, $tb:expr, $n:expr, $st:expr, $err:expr, $done:expr, $spd:expr, $start:expr) => {
+            ($p:expr, $bd:expr, $tb:expr, $n:expr, $st:expr, $err:expr, $done:expr, $spd:expr, $start:expr, $eta:expr) => {
                 if let Some(dl) = shared.lock().unwrap().active_downloads.iter_mut().find(|d| d.id == dl_id) {
                     if let Some(p) = $p { dl.progress = p; }
                     if let Some(bd) = $bd { dl.bytes_downloaded = bd; }
@@ -333,132 +354,302 @@ fn spawn_download_task(
                     if let Some(done) = $done { dl.is_done = done; }
                     if let Some(spd) = $spd { dl.speed_bytes_per_sec = spd; }
                     if let Some(start) = $start { dl.start_time = Some(start); }
+                    if let Some(eta) = $eta { dl.eta_seconds = eta; }
                 }
             };
         }
 
-        let link = match crate::link::ShareLink::parse(&link_str) {
-            Ok(l) => l,
-            Err(e) => {
-                update!(None, None, None, None, Some("Erro no link".into()), Some(e.to_string()), None, None, None);
-                return;
-            }
-        };
-
-        let proxy = match reqwest::Proxy::all(format!("socks5h://{}", socks_addr)) {
+        let parsed = match crate::link::parse_any(&link_str) {
             Ok(p) => p,
             Err(e) => {
-                update!(None, None, None, None, Some("Erro de proxy".into()), Some(e.to_string()), None, None, None);
+                update!(None, None, None, None, Some("Erro no link".into()), Some(e.to_string()), None, None, None, None);
                 return;
             }
-        };
-
-        let client = match reqwest::Client::builder().proxy(proxy).build() {
-            Ok(c) => c,
-            Err(e) => {
-                update!(None, None, None, None, Some("Erro cliente".into()), Some(e.to_string()), None, None, None);
-                return;
-            }
-        };
-
-        let base = format!("http://{}/s/{}", link.onion, link.file_id);
-
-        let manifest: crate::server::routes::Manifest = match client.get(format!("{}/manifest", base)).send().await {
-            Ok(r) => match r.error_for_status() {
-                Ok(res) => match res.json().await {
-                    Ok(m) => m,
-                    Err(e) => { update!(None, None, None, None, Some("Erro manifest".into()), Some(e.to_string()), None, None, None); return; }
-                },
-                Err(e) => { update!(None, None, None, None, Some("Arquivo não encontrado".into()), Some(e.to_string()), None, None, None); return; }
-            },
-            Err(e) => { update!(None, None, None, None, Some("Tor falhou".into()), Some(e.to_string()), None, None, None); return; }
         };
 
         let start_t = std::time::Instant::now();
-        update!(Some(0.0), Some(0), Some(manifest.file_size), Some(manifest.file_name.clone()), Some("Baixando...".into()), None, None, Some(0), Some(start_t));
+        update!(Some(0.0), Some(0), Some(0), None, Some("Preparando download...".into()), None, None, Some(0), Some(start_t), None);
 
-        let out_path = out_dir.join(&manifest.file_name);
-        tokio::fs::create_dir_all(&out_dir).await.ok();
-        let mut out_file = match tokio::fs::File::create(&out_path).await {
-            Ok(f) => f,
-            Err(e) => { update!(None, None, None, None, Some("Erro ao criar arquivo".into()), Some(e.to_string()), None, None, None); return; }
-        };
+        let result: anyhow::Result<()> = async {
+            match parsed {
+                crate::link::ParsedLink::Direct(link) => {
+                    let client = build_http_client(&format!("http://{}", link.onion), Some(socks_addr.clone()))?;
+                    let base = format!("http://{}/s/{}", link.onion, link.file_id);
+                    let manifest: crate::server::routes::Manifest = client
+                        .get(format!("{}/manifest", base))
+                        .send()
+                        .await?
+                        .error_for_status()?
+                        .json()
+                        .await?;
 
-        let mut bd = 0;
-        let mut last_speed_update = std::time::Instant::now();
-        let mut bytes_since_last_update = 0;
-        let mut speed = 0;
+                    update!(Some(0.0), Some(0), Some(manifest.file_size), Some(manifest.file_name.clone()), Some("Baixando direto do peer...".into()), None, None, Some(0), None, None);
+                    tokio::fs::create_dir_all(&out_dir).await.ok();
+                    let out_path = out_dir.join(&manifest.file_name);
+                    let mut out_file = tokio::fs::File::create(&out_path).await?;
+                    let mut downloaded = 0u64;
+                    for idx in 0..manifest.total_chunks {
+                        let ct = client
+                            .get(format!("{}/chunk/{}", base, idx))
+                            .send()
+                            .await?
+                            .error_for_status()?
+                            .bytes()
+                            .await?;
+                        let pt = crate::crypto::decrypt_chunk(&link.key, link.file_id, idx, &ct)?;
+                        tokio::io::AsyncWriteExt::write_all(&mut out_file, &pt).await?;
+                        downloaded += pt.len() as u64;
+                        let prg = (idx + 1) as f32 / manifest.total_chunks.max(1) as f32;
+                        let elapsed = start_t.elapsed().as_secs_f64().max(0.001);
+                        let speed = (downloaded as f64 / elapsed) as u64;
+                        let eta = if speed > 0 { Some((manifest.file_size - downloaded) / speed) } else { None };
+                        update!(Some(prg), Some(downloaded), Some(manifest.file_size), None, Some("Baixando direto do peer...".into()), None, None, Some(speed), None, Some(eta));
+                    }
+                    tokio::io::AsyncWriteExt::flush(&mut out_file).await?;
+                }
+                crate::link::ParsedLink::Swarm(swarm) => {
+                    #[derive(serde::Deserialize)]
+                    struct SwarmLookupResponse { file: Option<NetworkFile> }
 
-        for idx in 0..manifest.total_chunks {
-            let ct = match client.get(format!("{}/chunk/{}", base, idx)).send().await {
-                Ok(r) => match r.error_for_status() {
-                    Ok(res) => match res.bytes().await {
-                        Ok(b) => b,
-                        Err(e) => { update!(None, None, None, None, Some("Erro bytes".into()), Some(e.to_string()), None, None, None); return; }
-                    },
-                    Err(e) => { update!(None, None, None, None, Some("Erro HTTP ao baixar".into()), Some(e.to_string()), None, None, None); return; }
-                },
-                Err(e) => { update!(None, None, None, None, Some("Conexão caiu".into()), Some(e.to_string()), None, None, None); return; }
-            };
+                    let tracker_client = build_http_client(&swarm.tracker_url, Some(socks_addr.clone()))?;
+                    let lookup: SwarmLookupResponse = tracker_client
+                        .get(format!("{}/swarm/{}", swarm.tracker_url.trim_end_matches('/'), swarm.content_hash))
+                        .send()
+                        .await?
+                        .error_for_status()?
+                        .json()
+                        .await?;
+                    let network_file = lookup.file.context("arquivo não encontrado no swarm do tracker")?;
+                    anyhow::ensure!(!network_file.peers.is_empty(), "nenhum peer disponível para esse hash");
 
-            let pt = match crate::crypto::decrypt_chunk(&link.key, link.file_id, idx, &ct) {
-                Ok(pt) => pt,
-                Err(e) => { update!(None, None, None, None, Some("Erro de Criptografia".into()), Some(e.to_string()), None, None, None); return; }
-            };
+                    let peer_client = if let Some(first_peer) = network_file.peers.first() {
+                        build_http_client(&format!("http://{}", first_peer.onion), Some(socks_addr.clone()))?
+                    } else {
+                        anyhow::bail!("nenhum peer disponível")
+                    };
 
-            if let Err(e) = tokio::io::AsyncWriteExt::write_all(&mut out_file, &pt).await {
-                update!(None, None, None, None, Some("Erro disco".into()), Some(e.to_string()), None, None, None);
-                return;
+                    let first_peer = network_file.peers[0].clone();
+                    let base = format!("http://{}/s/{}", first_peer.onion, first_peer.file_id);
+                    let manifest: crate::server::routes::Manifest = peer_client
+                        .get(format!("{}/manifest", base))
+                        .send()
+                        .await?
+                        .error_for_status()?
+                        .json()
+                        .await?;
+
+                    let key = crate::crypto::key_from_content_hash(&network_file.content_hash)?;
+                    update!(Some(0.0), Some(0), Some(manifest.file_size), Some(manifest.file_name.clone()), Some(format!("Baixando via swarm de {} peers...", network_file.peer_count)), None, None, Some(0), None, None);
+                    tokio::fs::create_dir_all(&out_dir).await.ok();
+                    let out_path = out_dir.join(&manifest.file_name);
+
+                    let mut join_set = tokio::task::JoinSet::new();
+                    let concurrency = network_file.peers.len().clamp(2, 8);
+                    let sem = std::sync::Arc::new(tokio::sync::Semaphore::new(concurrency));
+
+                    for idx in 0..manifest.total_chunks {
+                        let permit = sem.clone().acquire_owned().await?;
+                        let peers = network_file.peers.clone();
+                        let client = build_http_client(&format!("http://{}", peers[0].onion), Some(socks_addr.clone()))?;
+                        let key = key;
+                        join_set.spawn(async move {
+                            let _permit = permit;
+                            for offset in 0..peers.len() {
+                                let peer = &peers[(idx as usize + offset) % peers.len()];
+                                let base = format!("http://{}/s/{}", peer.onion, peer.file_id);
+                                let fetched = client
+                                    .get(format!("{}/chunk/{}", base, idx))
+                                    .send()
+                                    .await;
+                                if let Ok(resp) = fetched {
+                                    if let Ok(ok_resp) = resp.error_for_status() {
+                                        if let Ok(bytes) = ok_resp.bytes().await {
+                                            if let Ok(pt) = crate::crypto::decrypt_chunk(&key, peer.file_id, idx, &bytes) {
+                                                return Ok::<(u64, Vec<u8>), anyhow::Error>((idx, pt));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            anyhow::bail!("não foi possível baixar o chunk {} de nenhum peer", idx)
+                        });
+                    }
+
+                    let mut chunks: Vec<Option<Vec<u8>>> = vec![None; manifest.total_chunks as usize];
+                    let mut downloaded = 0u64;
+                    while let Some(res) = join_set.join_next().await {
+                        let (idx, pt) = res??;
+                        downloaded += pt.len() as u64;
+                        chunks[idx as usize] = Some(pt);
+                        let done_chunks = chunks.iter().filter(|c| c.is_some()).count() as u64;
+                        let prg = done_chunks as f32 / manifest.total_chunks.max(1) as f32;
+                        let elapsed = start_t.elapsed().as_secs_f64().max(0.001);
+                        let speed = (downloaded as f64 / elapsed) as u64;
+                        let eta = if speed > 0 && manifest.file_size > downloaded { 
+                            Some((manifest.file_size - downloaded) / speed) 
+                        } else { 
+                            None 
+                        };
+                        update!(Some(prg), Some(downloaded), Some(manifest.file_size), None, Some(format!("Baixando via swarm de {} peers...", network_file.peer_count)), None, None, Some(speed), None, Some(eta));
+                    }
+
+                    let mut out_file = tokio::fs::File::create(&out_path).await?;
+                    for chunk in chunks.into_iter() {
+                        let chunk = chunk.context("faltou chunk no download swarm")?;
+                        tokio::io::AsyncWriteExt::write_all(&mut out_file, &chunk).await?;
+                    }
+                    tokio::io::AsyncWriteExt::flush(&mut out_file).await?;
+                }
             }
+            Ok(())
+        }.await;
 
-            let chunk_len = pt.len() as u64;
-            bd += chunk_len;
-            bytes_since_last_update += chunk_len;
-
-            let elapsed = last_speed_update.elapsed().as_secs_f64();
-            if elapsed >= 1.0 {
-                speed = (bytes_since_last_update as f64 / elapsed) as u64;
-                last_speed_update = std::time::Instant::now();
-                bytes_since_last_update = 0;
-            }
-
-            let prg = (idx + 1) as f32 / manifest.total_chunks as f32;
-            update!(Some(prg), Some(bd), None, None, Some("Baixando...".into()), None, None, Some(speed), None);
+        match result {
+            Ok(()) => update!(Some(1.0), None, None, None, Some("Concluído!".into()), None, Some(true), Some(0), None, Some(None)),
+            Err(e) => update!(None, None, None, None, Some("Falha no download".into()), Some(e.to_string()), None, Some(0), None, Some(None)),
         }
-
-        let _ = tokio::io::AsyncWriteExt::flush(&mut out_file).await;
-        let _ = tokio::io::AsyncWriteExt::flush(&mut out_file).await;
-        update!(Some(1.0), Some(manifest.file_size), None, None, Some("Concluído!".into()), None, Some(true), Some(0), None);
     });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Sincroniza ativamente com o Tracker (Ping & Fetch)
-// ─────────────────────────────────────────────────────────────────────────────
-async fn sync_tracker(tracker_shared: SharedStateRef) {
-    let (tor_active, socks_addr, node_id, tracker_url, files) = {
-        let s = tracker_shared.lock().unwrap();
-        let cfg = crate::config::AppConfig::load();
+fn build_http_client(base_url: &str, socks_addr: Option<String>) -> anyhow::Result<reqwest::Client> {
+    let mut builder = reqwest::Client::builder();
+    if base_url.contains(".onion") {
+        if let Some(socks) = socks_addr {
+            builder = builder.proxy(reqwest::Proxy::all(format!("socks5h://{}", socks))?);
+        }
+    }
+    Ok(builder.build()?)
+}
 
-        let p_files = if cfg.share_publicly {
-            s.shared_files
-                .iter()
-                .map(|f| NetworkFile {
-                    name: f.name.clone(),
-                    size: f.size,
-                    link: f.link.clone(),
-                })
-                .collect()
-        } else {
-            vec![]
+fn tracker_ws_url(tracker_url: &str) -> String {
+    if tracker_url.starts_with("https://") {
+        tracker_url.replacen("https://", "wss://", 1) + "/ws"
+    } else {
+        tracker_url.replacen("http://", "ws://", 1) + "/ws"
+    }
+}
+
+async fn tracker_ws_loop(shared: SharedStateRef) {
+    loop {
+        let (tor_active, onion_addr, _socks_addr, tracker_url) = {
+            let s = shared.lock().unwrap();
+            let cfg = AppConfig::load();
+            (
+                s.tor_active,
+                s.onion_addr.clone(),
+                s.tor_socks_addr.clone(),
+                cfg.tracker_url,
+            )
         };
 
+        if !tor_active || onion_addr.is_none() {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            continue;
+        }
+
+        let socks_addr_str = _socks_addr.clone();
+        let tracker_url_clone = tracker_url.clone();
+        let ws_url = tracker_ws_url(tracker_url_clone.trim_end_matches('/'));
+
+        let ws_conn: anyhow::Result<Either<_, _>> = async {
+            if tracker_url_clone.contains(".onion") {
+                if let Some(ref socks) = socks_addr_str {
+                    let socks_socket: SocketAddr = socks.parse()?;
+                    let url = url::Url::parse(&ws_url)?;
+                    let host = url.host_str().context("no host")?;
+                    let port = url.port().unwrap_or(80);
+                    let stream = tokio_socks::tcp::Socks5Stream::connect(socks_socket, (host, port)).await?;
+                    let (ws, _resp) = client_async_with_config(ws_url.clone(), stream, None).await?;
+                    Ok(Either::Left(ws))
+                } else {
+                    anyhow::bail!("Tor desativado para tracker onion")
+                }
+            } else {
+                let (ws, _resp) = tokio_tungstenite::connect_async(ws_url.clone()).await?;
+                Ok(Either::Right(ws))
+            }
+        }.await;
+
+        match ws_conn {
+            Ok(ws_stream) => {
+                tracing::info!("Conectado ao Tracker WebSocket: {}", ws_url);
+                let _ = ws_comm_loop(ws_stream, shared.clone()).await;
+            }
+            Err(e) => {
+                tracing::warn!("Erro ao conectar no Tracker WebSocket ({}): {}", ws_url, e);
+                let _ = sync_tracker(shared.clone()).await;
+                tokio::time::sleep(Duration::from_secs(3)).await;
+            }
+        }
+    }
+}
+
+async fn ws_comm_loop<S>(mut ws_stream: S, shared: SharedStateRef) -> anyhow::Result<()>
+where S: SinkExt<Message, Error = tokio_tungstenite::tungstenite::Error> + StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>> + Unpin
+{
+    let mut interval = tokio::time::interval(Duration::from_secs(5));
+    loop {
+        tokio::select! {
+            _ = interval.tick() => {
+                let payload = {
+                    let s = shared.lock().unwrap();
+                    let cfg = AppConfig::load();
+                    if !s.tor_active {
+                        None
+                    } else {
+                        let files = if cfg.share_publicly {
+                            s.shared_files.iter().map(|f| AnnouncedFile {
+                                file_id: f.file_id,
+                                name: f.name.clone(),
+                                size: f.size,
+                                link: f.link.clone(),
+                                content_hash: f.content_hash.clone(),
+                            }).collect()
+                        } else {
+                            Vec::new()
+                        };
+                        s.onion_addr.clone().map(|onion| WsClientMessage::Announce {
+                            node_id: cfg.node_id,
+                            onion,
+                            files,
+                        })
+                    }
+                };
+                if let Some(msg) = payload {
+                    let text = serde_json::to_string(&msg)?;
+                    ws_stream.send(Message::Text(text.into())).await?;
+                }
+            }
+            incoming = ws_stream.next() => {
+                match incoming {
+                    Some(Ok(Message::Text(text))) => {
+                        if let Ok(WsServerMessage::Lobby { lobby }) = serde_json::from_str::<WsServerMessage>(&text) {
+                            shared.lock().unwrap().global_lobby = lobby;
+                        }
+                    }
+                    Some(Ok(Message::Ping(bytes))) => {
+                        let _ = ws_stream.send(Message::Pong(bytes)).await;
+                    }
+                    Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
+                    _ => {}
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn sync_tracker(shared: SharedStateRef) {
+    let (tor_active, socks_addr, tracker_url, node_id, files, onion) = {
+        let s = shared.lock().unwrap();
+        let cfg = AppConfig::load();
         (
             s.tor_active,
             s.tor_socks_addr.clone(),
-            cfg.node_id,
             cfg.tracker_url,
-            p_files,
+            cfg.node_id.clone(),
+            s.shared_files.clone(),
+            s.onion_addr.clone(),
         )
     };
 
@@ -466,45 +657,104 @@ async fn sync_tracker(tracker_shared: SharedStateRef) {
         return;
     }
 
-    // Se for .onion, usa o proxy Socks5h senão usa cliente normal
-    let client = if tracker_url.contains(".onion") {
-        if let Some(socks) = socks_addr {
-            if let Ok(proxy) = reqwest::Proxy::all(format!("socks5h://{}", socks)) {
-                reqwest::Client::builder()
-                    .proxy(proxy)
-                    .build()
-                    .unwrap_or_default()
-            } else {
-                reqwest::Client::new()
-            }
-        } else {
-            reqwest::Client::new()
+    let tracker_url = tracker_url.trim_end_matches('/').to_string();
+    if let Ok(client) = build_http_client(&tracker_url, socks_addr) {
+        // Envia anúncio via HTTP (Fallback robusto para WAN/Tor)
+        if let Some(onion) = onion {
+            let files_announced: Vec<AnnouncedFile> = files
+                .into_iter()
+                .map(|f| AnnouncedFile {
+                    file_id: f.file_id,
+                    name: f.name,
+                    size: f.size,
+                    link: f.link,
+                    content_hash: f.content_hash,
+                })
+                .collect();
+
+            let announce_msg = WsClientMessage::Announce {
+                node_id,
+                onion,
+                files: files_announced,
+            };
+            let _ = client
+                .post(format!("{}/announce", tracker_url))
+                .json(&announce_msg)
+                .send()
+                .await;
         }
-    } else {
-        reqwest::Client::new()
-    };
 
-    #[derive(serde::Serialize)]
-    struct PingReq {
-        node_id: String,
-        files: Vec<NetworkFile>,
+        // Busca o lobby global
+        if let Ok(res) = client.get(format!("{}/lobby", tracker_url)).send().await {
+            if let Ok(lobby) = res.json::<NetworkLobby>().await {
+                shared.lock().unwrap().global_lobby = lobby;
+            }
+        }
     }
+}
 
-    // Ping Tracker (Avisa: Estou online e tenho esses arquivos)
-    let _ = client
-        .post(format!("{}/ping", tracker_url))
-        .json(&PingReq {
-            node_id: node_id.clone(),
-            files: files.clone(),
-        })
-        .send()
-        .await;
+async fn static_peers_loop(shared: SharedStateRef) {
+    let mut interval = tokio::time::interval(Duration::from_secs(45));
+    loop {
+        interval.tick().await;
 
-    // Busca Arquivos Globalmente
-    if let Ok(res) = client.get(format!("{}/lobby", tracker_url)).send().await {
-        if let Ok(lobby) = res.json::<NetworkLobby>().await {
-            let mut s = tracker_shared.lock().unwrap();
-            s.global_lobby = lobby;
+        let (tor_active, socks_addr, peers) = {
+            let s = shared.lock().unwrap();
+            let cfg = AppConfig::load();
+            (s.tor_active, s.tor_socks_addr.clone(), cfg.bootstrap_peers.clone())
+        };
+
+        if !tor_active || peers.is_empty() {
+            continue;
+        }
+
+        for peer_base_url in peers {
+            let shared_inner = shared.clone();
+            let socks_inner = socks_addr.clone();
+            tokio::spawn(async move {
+                if let Ok(client) = build_http_client(&peer_base_url, socks_inner) {
+                    let url = format!("{}/files", peer_base_url.trim_end_matches('/'));
+                    if let Ok(resp) = client.get(&url).send().await {
+                        if let Ok(files) = resp.json::<Vec<crate::server::routes::FileEntry>>().await {
+                            let mut s = shared_inner.lock().unwrap();
+                            let onion_host = peer_base_url
+                                .replace("http://", "")
+                                .replace("https://", "")
+                                .trim_end_matches('/')
+                                .to_string();
+                                
+                            for f in files {
+                                let entry = s.global_lobby.files.iter_mut().find(|nf| nf.content_hash == f.content_hash);
+                                if let Some(nf) = entry {
+                                    if !nf.peers.iter().any(|p| p.onion == onion_host) {
+                                        nf.peers.push(PeerLocation {
+                                            node_id: "[Peer Direto]".into(),
+                                            onion: onion_host.clone(),
+                                            file_id: f.file_id,
+                                            link: format!("opoc://{}/s/{}#Manual", onion_host, f.file_id),
+                                        });
+                                        nf.peer_count = nf.peers.len();
+                                    }
+                                } else {
+                                    s.global_lobby.files.push(NetworkFile {
+                                        name: f.file_name,
+                                        size: f.file_size,
+                                        link: format!("opocswarm://swarm/{}#Manual", f.content_hash),
+                                        content_hash: f.content_hash,
+                                        peer_count: 1,
+                                        peers: vec![PeerLocation {
+                                            node_id: "[Peer Direto]".into(),
+                                            onion: onion_host.clone(),
+                                            file_id: f.file_id,
+                                            link: format!("opoc://{}/s/{}#Manual", onion_host, f.file_id),
+                                        }],
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            });
         }
     }
 }

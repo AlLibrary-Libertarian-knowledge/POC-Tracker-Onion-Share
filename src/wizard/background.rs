@@ -96,8 +96,7 @@ pub async fn run(
             // ── Adicionar arquivo ─────────────────────────────────────────────
             ControlMsg::AddFile { path, chunk_size } => {
                 if let Some(ref h) = server {
-                    let key = crypto::random_key();
-                    match h.add_file(path, chunk_size, key).await {
+                    match h.add_file(path, chunk_size).await {
                         Ok(share) => {
                             let link = h.link_for(&share);
                             let _ = event_tx

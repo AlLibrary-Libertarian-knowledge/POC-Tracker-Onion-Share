@@ -12,8 +12,8 @@ RUN cargo build --release --bin tracker
 # 2. Imagem final do Servidor: Super leve e focada apenas em rodar
 FROM debian:bookworm-slim
 
-# Instala certificados necessários para conexões (caso requeira)
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+# Instala certificados necessários para conexões + curl para debug
+RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/*
 
 # Copia do builder o binário gerado acima
 COPY --from=builder /usr/src/app/target/release/tracker /usr/local/bin/tracker

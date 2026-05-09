@@ -5,6 +5,7 @@
 /// - Windows → baixa tor-expert-bundle via HTTPS e extrai tor.exe
 ///             Após instalar, adiciona o diretório ao PATH do usuário
 ///             (sem precisar de admin — usa HKCU no Registry)
+#[cfg(target_os = "windows")]
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 

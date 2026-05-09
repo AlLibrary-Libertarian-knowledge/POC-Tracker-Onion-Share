@@ -4,7 +4,7 @@ Bem-vindo ao manual do Tracker! Esta é a peça central da rede do seu TCC. Ele 
 
 ---
 
-### Pergunta: "Se eu deixar ele rodando no meu PC hoje (como `127.0.0.1:8080`), quem baixar o meu `.exe` pelo mundo consegue usar a rede?"
+## ❓ Pergunta: "Se eu deixar ele rodando no meu PC hoje (como `127.0.0.1:8080`), quem baixar o meu `.exe` pelo mundo consegue usar a rede?"
 
 **Resposta:** ❌ Não!
 Se o seu código-fonte está configurado com `127.0.0.1`, quando um usário no Japão abrir o aplicativo, o aplicativo tentará se conectar à rede local do computador *dele* (no Japão), e não ao *seu* Tracker no Brasil. Ele dirá "Nenhum usuário online".
@@ -26,7 +26,11 @@ No terminal, dentro desta mesma pasta (`deploy`), rode o comando:
 docker compose up -d --build
 ```
 
-> **O que isso faz?** Isso baixa a imagem Alpine do Tor, constrói a pequena imagem Rust (sua aplicação tracker 8080), amarra as duas numa sub-rede do Docker, as blinda e esconde do mundo físico. Todo tráfego passa obrigatoriamente pela rede Tor, atuando sob "Confiança Zero", sem vazar seu IP de casa.
+O serviço **`tor_service`** usa imagem própria (`Dockerfile.tor`): o pacote **Tor** é instalado no **`docker build`**, não em cada subida do contêiner. Isso evita falhas do tipo `apk` + *DNS: transient error* no Docker Desktop (Windows/macOS), que antes faziam o `tor` “sumir” dos repositórios.
+
+Se o **build** da imagem falhar por DNS, confira VPN/firewall e, no Docker Desktop → **Settings → Network**, experimente fixar DNS (ex.: `8.8.8.8`).
+
+> **O que isso faz?** Constrói o tracker (Rust) e sobe o Tor em um contêiner que **compartilha a rede do tracker** (`network_mode: service:tracker`), com `HiddenServicePort 80 127.0.0.1:8080`. (O Tor não aceita nomes DNS tipo `tracker:8080` no `torrc` — isso gerava *Unparseable address*.) O volume `tor_keys` mantém a chave do `.onion` estável.
 
 ### Passo 2: Descobrir o seu Link ".onion" Oficial
 
@@ -39,7 +43,7 @@ docker compose exec tor_service cat /var/lib/tor/hidden_service/hostname
 ```
 
 A saída será algo como:
-`zxcy4abcedfg...xyz.onion`
+`3anhnwqwxmjo7xsyxs3uoocdctxd3nwkfm5lt36xcwi4hfmkbttoktqd.onion`
 
 🎊 **Parabéns! Esse é o IP/Domínio permanente do seu Servidor P2P para toda a vida!** 🎊
 
@@ -52,7 +56,7 @@ Guarde o Link! Ele será introduzido no código do Cliente (no arquivo `src/conf
 3. Troque a variável `tracker_url` para algo assim:
 
 ```rust
-tracker_url: "http://zxcy4abcedfg...xyz.onion".to_string(),
+tracker_url: "http://3anhnwqwxmjo7xsyxs3uoocdctxd3nwkfm5lt36xcwi4hfmkbttoktqd.onion".to_string(),
 ```
 
 > *(Atenção, o prefixo DEVE ser `http://` ao invés de `https://` porque a própria rede do Tor já criptografa tudo ponta-a-ponta)*
@@ -64,6 +68,46 @@ Mesmo a pessoa que baixe o `.exe` no Japão usará os túneis invisíveis do Tor
 
 ---
 
+## 🌐 WebSocket sobre Tor (v0.7.4+)
+
+Nas versões anteriores, o lobby global funcionava via "Polling HTTP" (o app perguntava pro servidor a cada X segundos). Isso era lento e causava o erro **404 Not Found** porque o servidor demorava a atualizar os IDs dos arquivos quando uma máquina caía e voltava.
+
+A partir da **v0.7.4**, o sistema usa **WebSockets sobre SOCKS5 (Tor)**:
+
+- **Conexão Permanente:** O app mantém um "túnel" aberto com o Tracker.
+- **Batimento Cardíaco (Heartbeat):** O servidor sabe instantaneamente se você está online.
+- **Anúncios em Tempo Real:** Se você adiciona um arquivo, ele aparece no lobby de todo mundo em menos de 5 segundos.
+- **IDs Sempre Frescos:** Como a conexão é persistente, o Tracker sempre tem o `file_id` mais recente da sua sessão, eliminando o erro 404.
+
+---
+
+## 🔍 Monitoramento e Troubleshooting
+
+### Ver quantos PCs estão conectados (Lobby Real)
+
+Você pode ver a lista bruta de IDs de máquinas conectadas no seu servidor através deste comando no terminal do seu servidor:
+
+```bash
+docker compose exec tracker curl -s http://localhost:8080/debug/nodes
+```
+
+### ⚠️ Problema: "Tenho várias máquinas mas só aparece 1 Online"
+
+Se você abrir o app em dois PCs e marcar apenas "1 online", o motivo mais provável é **Colisão de ID de Nó**.
+
+**Por que acontece?**
+Cada aplicativo gera um `node_id` único no seu arquivo de configuração na primeira vez que abre. Se você baixou o app e **copiou a pasta inteira** (incluindo a pasta de dados do usuário) de um computador para o outro, ambos terão o *mesmo ID*. O servidor vê isso como se fosse o mesmo PC trocando de link e "sobrescreve" a conexão.
+
+**Como resolver:**
+
+1. No computador onde o ID está repetido, feche o aplicativo.
+2. Delete o arquivo de configuração localizado em:
+   - **Linux:** `~/.config/br.tcc/onion_poc/config.json`
+   - **Windows:** `%AppData%\br.tcc\onion_poc\config.json`
+3. Abra o app novamente. Ele gerará um novo ID único e agora o Tracker mostrará "2 online".
+
+---
+
 ## 🔒 Dica de Ouro sobre as Chaves
 
-Lembre-se: Dentro deste `docker-compose.yml`, deixei mapeado um Volume chamado `tor_keys`. Ele protege literalmente seu "Domínio" contra perda de dados. Se amanhã você cancelar sua VPS ou desligar o PC, para "reciclar" o mesmo link Onion, você precisa transferir/fazer backup dos arquivos que foram gerados ali pelo Docker. Se um dia perder isso, o Docker inventará *um novo link .onion* quando ligar de novo e os apps antigos que você distribuiu mundo afora se perderão dele!
+ Lembre-se: Dentro deste `docker-compose.yml`, deixei mapeado um Volume chamado `tor_keys`. Ele protege literalmente seu "Domínio" contra perda de dados. Se amanhã você cancelar sua VPS ou desligar o PC, para "reciclar" o mesmo link Onion, você precisa transferir/fazer backup dos arquivos que foram gerados ali pelo Docker. Se um dia perder isso, o Docker inventará *um novo link .onion* quando ligar de novo e os apps antigos que você distribuiu mundo afora se perderão dele!

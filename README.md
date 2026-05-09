@@ -3,6 +3,7 @@
 > **TCC PoC** — Compartilhamento seguro de arquivos via Tor Onion Service, implementado 100% em Rust.
 
 [![CI/Release](https://github.com/DJmesh/onion_poc/actions/workflows/build.yml/badge.svg)](https://github.com/DJmesh/onion_poc/actions)
+[![Latest Release](https://img.shields.io/github/v/release/DJmesh/onion_poc?label=unstable&color=blue)](https://github.com/DJmesh/onion_poc/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
@@ -24,8 +25,8 @@
 
 ## 🚀 Download Automático (Builds Oficiais)
 
-Baixe as versões mais recentes compiladas para Windows, Linux e macOS diretamente na **página de Releases**:
-👉 **[Baixar onion-poc (GitHub Releases)](https://github.com/DJmesh/onion_poc/releases/latest)**
+Baixe a versão **v0.7.5 (UX & Real-time Update)** compilada para Windows, Linux e macOS:
+👉 **[Baixar onion-poc v0.7.5 (GitHub Releases)](https://github.com/DJmesh/onion_poc/releases/latest)**
 
 ---
 
@@ -41,7 +42,7 @@ sudo dpkg -i onion-poc_linux_amd64.deb
 
 ### Windows
 
-```
+```text
 Baixe e execute o instalador onion_poc_setup_windows.exe.
 O wizard (Inno Setup) cuidará de instalar o app em seu computador,
 extrair o Tor pré-embutido e criar o atalho na área de trabalho!
@@ -77,8 +78,8 @@ O **onion-poc** funciona nos bastidores de forma elegante, dividindo a responsab
 
 No servidor, operam dois contêineres trabalhando em dupla:
 
-*   **O Tracker (O Código em Rust):** Um servidor Web contruído em Axum extremamente leve. Ele não salva absolutamente nenhum arquivo. Seu único papel é ouvir a porta 8080 e gerenciar um "Lobby" em memória RAM: *"O usuário XYZ está online e possui o arquivo 'foto.jpg'"*. Se algum cliente ficar silencioso por 2 minutos, ele o remove da lista.
-*   **A "Capa" do Tor (`tor_service`):** Como o Tracker por si só não se comunica com a rede Tor, este segundo contêiner atua como um **"Porteiro Cego"**. Ele roda o serviço oficial do Tor, cria um endereço secreto `.onion` e intercepta qualquer acesso vindo da DarkWeb. Ele decripta o pacote e repassa para a porta 8080 do Tracker. Graças a ele, o Tracker enxerga apenas requisições locais comuns e não faz ideia do verdadeiro IP que originou a mensagem!
+* **O Tracker (O Código em Rust):** Um servidor Web contruído em Axum extremamente leve. Ele não salva absolutamente nenhum arquivo. Seu único papel é ouvir a porta 8080 e gerenciar um "Lobby" em memória RAM: *"O usuário XYZ está online e possui o arquivo 'foto.jpg'"*. Se algum cliente ficar silencioso por 2 minutos, ele o remove da lista.
+* **A "Capa" do Tor (`tor_service`):** Como o Tracker por si só não se comunica com a rede Tor, este segundo contêiner atua como um **"Porteiro Cego"**. Ele roda o serviço oficial do Tor, cria um endereço secreto `.onion` e intercepta qualquer acesso vindo da DarkWeb. Ele decripta o pacote e repassa para a porta 8080 do Tracker. Graças a ele, o Tracker enxerga apenas requisições locais comuns e não faz ideia do verdadeiro IP que originou a mensagem!
 
 Essa dupla garante um "ponto de encontro" eficiente sem comprometer a identidade física de ninguém.
 
@@ -88,37 +89,55 @@ Quando você executa o `onion_poc.exe` (ou as versões em .deb e macOS) no seu c
 
 #### 🚇 Inicializando o "Motor" Local
 
-*   O seu aplicativo inicia de forma invisível um nó do Tor local em segundo plano.
-*   Ele rapidamente "cava um túnel" criptografado diretamente para a rede mundial do Tor.
-*   O seu computador ganha seu próprio URL `.onion`. Se você compartilha um arquivo, sua máquina se torna um mini-servidor invisível preparado para transferir **Chunks (pedaços)**.
+* O seu aplicativo inicia de forma invisível um nó do Tor local em segundo plano.
+* Ele rapidamente "cava um túnel" criptografado diretamente para a rede mundial do Tor.
+* O seu computador ganha seu próprio URL `.onion`. Se você compartilha um arquivo, sua máquina se torna um mini-servidor invisível preparado para transferir **Chunks (pedaços)**.
 
 #### 💓 O Batimento Cardíaco (Aba global de Busca)
 
 Existe um loop silencioso (no `src/gui/bg.rs`) rodando a cada 5 segundos:
 
-*   **Ping (Avisando que estou vivo):** O aplicativo coleta a sua lista de arquivos públicos, converte num JSON e trafega de fininho pelo túnel (Socks5) até o Tracker `.onion` remoto: *"Eaí Tracker, sou o Usuário 1234, ainda tô aqui e tenho os arquivos A e B."*
-*   **Fetch (Lendo o Radar):** Imediatamente, ele solicita: *"Me manda a lista de quem mais tá online"*. O Tracker responde com a lista global em posse de todas as máquinas conectadas.
-*   **Injeção ao Vivo:** A tela Egui é atualizada na "Limbo/Search" piscando em tempo real.
+* **Ping (Avisando que estou vivo):** O aplicativo coleta a sua lista de arquivos públicos, converte num JSON e trafega de fininho pelo túnel (Socks5) até o Tracker `.onion` remoto: *"Eaí Tracker, sou o Usuário 1234, ainda tô aqui e tenho os arquivos A e B."*
+* **Fetch (Lendo o Radar):** Imediatamente, ele solicita: *"Me manda a lista de quem mais tá online"*. O Tracker responde com a lista global em posse de todas as máquinas conectadas.
+* **Injeção ao Vivo:** A tela Egui é atualizada na "Limbo/Search" piscando em tempo real.
 
-#### 📥 Download e Transferência Exclusiva Ponto-a-Ponto
+#### 🔄 Sincronização e Download (WebSockets + Swarm)
 
-Aqui está o grande diferencial: **o Tracker jamais trafega arquivos!** Ele apenas aponta o mapa. Quando você clica em "Baixar", O Tracker "sai da jogada".
+A partir da versão **0.7.5**, o processo de download foi otimizado para ser 100% resiliente:
 
-1. O seu cliente Tor se conecta diretamente ao cliente Tor local de quem tem o arquivo (P2P real via `.onion`), solicitando de forma assíncrona o arquivo despedaçado em "Chunks".
-2. O tráfego é blindado primeiramente pela rede Tor e, como camada extrema de segurança, **cada pedaço (Chunk)** é criptografado nativamente com seu algoritmo **XChaCha20-Poly1305** militar. Ninguém (nem o Provedor de Internet nem os Nós da rede Tor) sabe que arquivo está sendo passado!
-3. No seu computador, os pedaços chegam, são submetidos a uma dupla decriptagem e **remontados perfeitamente em memória.**
-
-### 🎭 Resumo da Ópera
-
-O Tracker funciona como o painel de **Classificados** de um jornal anônimo – ele anuncia quem tem o quê. Mas o verdadeiro leilão e as entregas ocorrem de forma rigorosa, secreta e **criptografada Ponto-a-Ponto de Máquina A para Máquina B**, furando firewalls naturalmente sem necessidade de liberar portas de modem ou ter IP fixo. 
+1. **Conexão Perene:** Ao abrir o app, ele estabelece um túnel **WebSocket via SOCKS5/Tor** com o Tracker. Isso significa que o servidor sabe instantaneamente quem entra e quem sai, mantendo o Lobby limpo.
+2. **Busca Baseada em Conteúdo:** Quando você busca um arquivo, o app recebe uma lista de **todos os endereços Onion** que possuem aquele mesmo Hash.
+3. **Download em Enxame (Swarm):** Ao clicar em baixar, o app inicia um "enxame":
+    * Ele divide o arquivo em pedaços de 256 KB.
+    * Ele solicita o Pedaço 1 do PC A, o Pedaço 2 do PC B, o Pedaço 3 do PC C... simultaneamente.
+    * Se o PC B cair, o app detecta e pede o Pedaço 2 para o PC A ou C automaticamente.
+4. **Dashboard de Alta Precisão:** A nova interface calcula a média de velocidade dos últimos pedaços e projeta o **ETA (Tempo Estimado)**, proporcionando uma experiência digna de gerenciadores de download profissionais.
 
 Toda essa orquestra militar dentro de **um binário veloz de interface limpa!** 🚀
 
 ---
 
+## 🔄 Evolução: O Que Mudou na v0.7.5?
+
+A versão atual (**0.7.0**) representa uma evolução fundamental em relação à arquitetura anterior. Abaixo, detalhamos o salto de um discovery simples para um sistema de enxame (**Swarm**) moderno:
+
+| Característica | Arquitetura Antiga (v0.6.x) | Nova Arquitetura Swarm (v0.7.5) | Benefício |
+| --- | --- | --- | --- |
+| **Protocolo Tracker** | HTTP Long-polling (lento) | **WebSocket Bi-direcional** | Lobby atualizado em tempo real. |
+| **Identificação** | Nome do arquivo (Vulnerável a colisão) | **BLAKE3 Content Hash** | Identifica conteúdo único globalmente. |
+| **Transferência** | 1 Cliente → 1 Servidor (Onion único) | **Multi-peer Swarm** | Baixa pedaços de vários peers ao mesmo tempo. |
+| **Deduplicação** | Arquivos iguais apareciam duplicados | **Agrupamento por Hash** | Mesma mídia em 10 máquinas = 1 entrada com 10 fontes. |
+| **Criptografia** | Chave aleatória por compartilhamento | **Chave Determinística (Hash)** | Permite baixar chunks de qualquer peer do enxame. |
+
+### 🛠️ Por que usar Hash BLAKE3?
+
+Diferente da versão anterior que dependia de links únicos (como o OnionShare original), a v0.7.5 implementa **descoberta baseada em conteúdo**. Se você tiver o `installer.iso` e outras 5 pessoas também tiverem (mesmo com nomes de arquivo diferentes), o sistema reconhece o hash e permite que você "puxe" os chunks de todos esses peers em paralelo, aumentando a disponibilidade e velocidade (similar ao BitTorrent).
+
+---
+
 ## 🏗️ Estrutura de Diretórios
 
-```
+```text
 src/
 ├── main.rs          — entrada: GUI (padrão) ou CLI (share/join)
 ├── lib.rs           — expõe módulos para testes externos
@@ -141,7 +160,7 @@ tests/
 
 ### Fluxo de dados
 
-```
+```text
         GUI Thread (eframe)                 Background Thread (tokio)
         ──────────────────                  ─────────────────────────
 update() → lock(SharedState) →  read ──→  poll control_queue()
@@ -209,8 +228,10 @@ cargo deb
 
 Veja [CHANGELOG.md](CHANGELOG.md) para histórico completo de versões.
 
-| Versão | Data | Destaque |
-|---|---|---|
+| **0.7.5** | 2026-03-17 | **UX & Real-time Dashboard** — Velocidade (Mbps/KB/s), ETA e Redesign do Lobby |
+| **0.7.4** | 2026-03-17 | **WebSocket @ Tor (SOCKS5)** — Suporte a Trackers Onion e Lobby Global Anônimo |
+| **0.7.3** | 2026-03-17 | **Fix Build & Production Tracker** — Correção de imports, debug nodes e URL Onion oficial |
+| **0.7.0** | 2026-03-17 | **Tracker WebSocket & Swarm Download** — lobby bi-direcional e download multi-peer por hash |
 | **0.6.1** | 2026-03-03 | Busca em tempo real e Correção da Bridge Docker no Tracker |
 | **0.6.0** | 2026-03-03 | Rede Decentralizada: Servidor Rastreador (Tracker) e aba de Lobby/Busca global implementada |
 | **0.5.0** | 2026-03-03 | Painel de Download nativo operando com socks_addr Tor em background (velocidade real) |
@@ -227,3 +248,7 @@ Veja [CHANGELOG.md](CHANGELOG.md) para histórico completo de versões.
 
 MIT — Eduardo Prestes, 2024.  
 Repositório: [github.com/DJmesh/onion_poc](https://github.com/DJmesh/onion_poc)
+
+---
+
+> **Nota para Teste (POC):** O endereço padrão do servidor de rastreio (tracker) agora é: `http://3phps2siiwstimug2mipw7tlizdvdmfydjf5clb7phujg4yfnkrh56qd.onion`. (Certifique-se de que o tracker esteja ativo se for testar localmente em outra porta).
