@@ -10,21 +10,21 @@ services:
     networks:
       - onion_p2p
 
-  # 2. O proxy anônimo: Cria um Hidden Service (URL .onion) apontando pro Tracker
+  # 2. Tor hidden service → tracker HTTP (must use 127.0.0.1: Tor rejects Docker DNS hostnames in HiddenServicePort)
   tor_service:
-    image: alpine:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.tor
     restart: unless-stopped
-    command: >
-      sh -c "apk add --no-cache tor && mkdir -p /var/lib/tor/hidden_service/ && echo 'HiddenServiceDir /var/lib/tor/hidden_service/' > /etc/tor/torrc && echo 'HiddenServicePort 80 tracker:8080' >> /etc/tor/torrc && chmod 700 /var/lib/tor/hidden_service/ && chown -R tor /var/lib/tor/ && su -s /bin/sh tor -c 'tor -f /etc/tor/torrc'"
+    # Share tracker's network namespace so HiddenServicePort can target 127.0.0.1:8080 (Axum).
+    network_mode: "service:tracker"
+    depends_on:
+      - tracker
     volumes:
       # Esse volume salva sua chave do domínio Tor (MUITO IMPORTANTE!)
       # Se você deletar o disco docker e não fizer backup, seu link .onion mudará
       # e todas as versões do App já instaladas pela internet "ficarão sem lobby".
       - tor_keys:/var/lib/tor/hidden_service/
-    networks:
-      - onion_p2p
-    depends_on:
-      - tracker
 
 volumes:
   tor_keys:

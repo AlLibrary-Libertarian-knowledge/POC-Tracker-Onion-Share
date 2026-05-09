@@ -26,7 +26,11 @@ No terminal, dentro desta mesma pasta (`deploy`), rode o comando:
 docker compose up -d --build
 ```
 
-> **O que isso faz?** Isso baixa a imagem Alpine do Tor, constrói a pequena imagem Rust (sua aplicação tracker 8080), amarra as duas numa sub-rede do Docker, as blinda e esconde do mundo físico. Todo tráfego passa obrigatoriamente pela rede Tor, atuando sob "Confiança Zero", sem vazar seu IP de casa.
+O serviço **`tor_service`** usa imagem própria (`Dockerfile.tor`): o pacote **Tor** é instalado no **`docker build`**, não em cada subida do contêiner. Isso evita falhas do tipo `apk` + *DNS: transient error* no Docker Desktop (Windows/macOS), que antes faziam o `tor` “sumir” dos repositórios.
+
+Se o **build** da imagem falhar por DNS, confira VPN/firewall e, no Docker Desktop → **Settings → Network**, experimente fixar DNS (ex.: `8.8.8.8`).
+
+> **O que isso faz?** Constrói o tracker (Rust) e sobe o Tor em um contêiner que **compartilha a rede do tracker** (`network_mode: service:tracker`), com `HiddenServicePort 80 127.0.0.1:8080`. (O Tor não aceita nomes DNS tipo `tracker:8080` no `torrc` — isso gerava *Unparseable address*.) O volume `tor_keys` mantém a chave do `.onion` estável.
 
 ### Passo 2: Descobrir o seu Link ".onion" Oficial
 
