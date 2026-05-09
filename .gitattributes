@@ -1,0 +1,2 @@
+# Shell scripts must use LF so Linux containers (Tor entrypoint) run on Windows hosts
+deploy/*.sh text eol=lf

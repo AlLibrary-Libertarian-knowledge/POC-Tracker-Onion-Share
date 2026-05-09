@@ -8,6 +8,10 @@ authors = ["Eduardo Prestes <dudu_edn@hotmail.com>"]
 repository = "https://github.com/DJmesh/onion_poc"
 readme = "README.md"
 
+[features]
+default = ["gui"]
+gui = ["dep:eframe", "dep:egui", "dep:rfd"]
+
 [package.metadata.deb]
 name            = "onion-poc"
 maintainer      = "Eduardo Prestes <dudu_edn@hotmail.com>"
@@ -55,12 +59,12 @@ directories = "5"
 tracing             = "0.1"
 tracing-subscriber  = { version = "0.3", features = ["env-filter", "fmt"] }
 
-# ── GUI nativa (egui/eframe) ─────────────────────────────────────────────────
-eframe = { version = "0.29", default-features = false, features = [
+# ── GUI nativa (egui/eframe) — optional for embedding (`default-features = false`) ──
+eframe = { version = "0.29", optional = true, default-features = false, features = [
     "default_fonts", "glow", "x11", "wayland",
 ] }
-egui  = "0.29"
-rfd   = "0.14"   # diálogos de arquivo nativos
+egui  = { version = "0.29", optional = true }
+rfd   = { version = "0.14", optional = true }
 
 # ── Tor auto-download (Windows) ──────────────────────────────────────────────
 flate2 = "1"

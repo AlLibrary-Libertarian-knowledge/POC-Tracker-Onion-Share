@@ -35,6 +35,12 @@ impl ShareLink {
         )
     }
 
+    /// Alias for hosts that expect POC-era naming (e.g. AlLibrary `to_link_string`).
+    #[inline]
+    pub fn to_link_string(&self) -> String {
+        self.to_string()
+    }
+
     pub fn parse(s: &str) -> anyhow::Result<Self> {
         let url = Url::parse(s).context("invalid link URL")?;
         anyhow::ensure!(url.scheme() == "opoc", "link must start with opoc://");
@@ -61,6 +67,11 @@ impl SwarmLink {
     pub fn to_string(&self) -> String {
         let encoded_tracker = URL_SAFE_NO_PAD.encode(self.tracker_url.as_bytes());
         format!("opocswarm://swarm/{}#{}", self.content_hash, encoded_tracker)
+    }
+
+    #[inline]
+    pub fn to_link_string(&self) -> String {
+        self.to_string()
     }
 
     pub fn parse(s: &str) -> anyhow::Result<Self> {
